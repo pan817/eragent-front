@@ -20,6 +20,36 @@ export interface AnalyzeResponse {
   failed_tasks: unknown[];
   created_at: string;
   duration_ms: number;
+  trace_id?: string;
+}
+
+export interface TraceSpan {
+  span_id: string;
+  trace_id: string;
+  parent_span_id: string | null;
+  span_type: string;
+  name: string;
+  status: string;
+  started_at: string;
+  finished_at: string;
+  duration_ms: number;
+  attributes: Record<string, unknown>;
+  error: string | null;
+}
+
+export interface TraceResponse {
+  trace_id: string;
+  agent_name: string;
+  session_id: string;
+  user_id: string;
+  status: string;
+  started_at: string;
+  finished_at: string;
+  duration_ms: number;
+  model_call_count: number;
+  tool_call_count: number;
+  error: string | null;
+  spans: TraceSpan[];
 }
 
 export interface ChatMessage {
@@ -29,4 +59,5 @@ export interface ChatMessage {
   timestamp: Date;
   status?: 'sending' | 'success' | 'error';
   durationMs?: number;
+  traceId?: string;
 }

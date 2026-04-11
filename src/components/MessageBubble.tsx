@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import type { ChatMessage } from '../types/api';
 import MarkdownContent from './MarkdownContent';
+import Avatar from './Avatar';
 
 interface Props {
   message: ChatMessage;
+  userId?: string | null;
   onTraceClick?: (traceId: string) => void;
   onRegenerate?: (id: string) => void;
 }
@@ -22,28 +24,6 @@ function formatRelativeTime(date: Date): string {
   if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
   return date.toLocaleDateString();
-}
-
-function UserAvatar() {
-  return (
-    <div className="avatar avatar-user" aria-label="用户">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
-    </div>
-  );
-}
-
-function AssistantAvatar() {
-  return (
-    <div className="avatar avatar-assistant" aria-label="AI 助手">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-        <path d="M12 2L2 8.5v7L12 22l10-6.5v-7L12 2z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      </svg>
-      <span className="avatar-pulse" />
-    </div>
-  );
 }
 
 function LoadingStages() {
@@ -65,7 +45,7 @@ function LoadingStages() {
   );
 }
 
-export default function MessageBubble({ message, onTraceClick, onRegenerate }: Props) {
+export default function MessageBubble({ message, userId, onTraceClick, onRegenerate }: Props) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
 
@@ -81,7 +61,11 @@ export default function MessageBubble({ message, onTraceClick, onRegenerate }: P
 
   return (
     <div className={`message-row ${isUser ? 'message-row-user' : 'message-row-assistant'}`}>
-      {isUser ? <UserAvatar /> : <AssistantAvatar />}
+      {isUser ? (
+        <Avatar role="user" seed={userId} size={36} />
+      ) : (
+        <Avatar role="assistant" size={36} />
+      )}
       <div className="message-column">
         <div className={`message-bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
           {isUser ? (
@@ -96,6 +80,20 @@ export default function MessageBubble({ message, onTraceClick, onRegenerate }: P
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
               <span>{message.content}</span>
+              {onRegenerate && (
+                <button
+                  type="button"
+                  className="error-retry-btn"
+                  onClick={() => onRegenerate(message.id)}
+                  title="重新发送该问题"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-9-9 9 9 0 0 1 9-9c2.5 0 4.8 1 6.5 2.6L21 8" />
+                    <path d="M21 3v5h-5" />
+                  </svg>
+                  重试
+                </button>
+              )}
             </div>
           ) : (
             <MarkdownContent content={message.content} />

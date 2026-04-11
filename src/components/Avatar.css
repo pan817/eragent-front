@@ -1,0 +1,138 @@
+/* ============================================
+ * Avatar 组件样式（component-scoped，与旧 .avatar 不冲突）
+ * ============================================ */
+
+.cp-avatar {
+  position: relative;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: white;
+  font-family: inherit;
+  box-shadow:
+    0 2px 6px rgba(15, 23, 42, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  overflow: visible;
+}
+
+[data-theme='dark'] .cp-avatar {
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.cp-avatar-initial {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  user-select: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+/* ---------- User: 登录态 identicon ---------- */
+.cp-avatar-user {
+  background: linear-gradient(135deg, #e0e7ff 0%, #ddd6fe 100%);
+  box-shadow:
+    0 3px 10px rgba(99, 102, 241, 0.22),
+    inset 0 0 0 1px rgba(99, 102, 241, 0.35);
+}
+
+[data-theme='dark'] .cp-avatar-user {
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.28) 0%,
+    rgba(139, 92, 246, 0.22) 100%
+  );
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px rgba(139, 92, 246, 0.45);
+}
+
+.cp-avatar-identicon {
+  display: block;
+  filter: drop-shadow(0 1px 1px rgba(15, 23, 42, 0.12));
+}
+
+[data-theme='dark'] .cp-avatar-identicon {
+  filter: brightness(1.55) saturate(1.1)
+    drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+}
+
+/* ---------- User: 未登录态 ---------- */
+.cp-avatar-anon {
+  background: var(--bg-muted);
+  color: var(--text-subtle);
+  box-shadow:
+    0 2px 6px rgba(15, 23, 42, 0.06),
+    inset 0 0 0 1px var(--border);
+}
+
+.cp-avatar-anon .cp-avatar-initial {
+  text-shadow: none;
+  font-weight: 600;
+}
+
+[data-theme='dark'] .cp-avatar-anon {
+  background: rgba(148, 163, 184, 0.12);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.3),
+    inset 0 0 0 1px rgba(148, 163, 184, 0.25);
+}
+
+/* ---------- Assistant ---------- */
+.cp-avatar-assistant {
+  background: var(--brand-gradient);
+  color: white;
+  box-shadow:
+    0 4px 14px rgba(99, 102, 241, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.cp-avatar-assistant svg {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+/* ---------- 呼吸光晕（仅 assistant） ---------- */
+.cp-avatar-glow {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(139, 92, 246, 0.45),
+    rgba(99, 102, 241, 0.2) 55%,
+    transparent 75%
+  );
+  opacity: 0.35;
+  animation: cpAvatarBreathe 2.6s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.cp-avatar-assistant > svg {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes cpAvatarBreathe {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+/* 深色模式下光晕更弱避免过曝 */
+[data-theme='dark'] .cp-avatar-glow {
+  background: radial-gradient(
+    circle,
+    rgba(139, 92, 246, 0.35),
+    rgba(99, 102, 241, 0.15) 55%,
+    transparent 75%
+  );
+}

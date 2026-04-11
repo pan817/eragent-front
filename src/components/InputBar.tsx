@@ -1,13 +1,131 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import './InputBar.css';
 
-interface Props {
-  onSend: (query: string) => void;
-  disabled: boolean;
+export type AnalystRole = 'general' | 'procurement' | 'finance' | 'supply';
+
+export interface SendOptions {
+  role: AnalystRole;
+  useMemory: boolean;
+  useExtData: boolean;
 }
 
-export default function InputBar({ onSend, disabled }: Props) {
+interface Props {
+  onSend: (query: string, options: SendOptions) => void;
+  disabled: boolean;
+  lastDurationMs?: number;
+  /** 递增触发：每次变化会把 draftText 注入输入框并聚焦 */
+  draftNonce?: number;
+  draftText?: string;
+  onOpenExamples?: () => void;
+  onOpenTips?: () => void;
+}
+
+interface RoleDef {
+  key: AnalystRole;
+  label: string;
+  icon: string;
+  hint: string;
+}
+
+const ROLES: RoleDef[] = [
+  { key: 'general', label: '通用分析', icon: '🧭', hint: '不限定业务视角，综合判断' },
+  { key: 'procurement', label: '采购分析师', icon: '🛒', hint: '聚焦供应商、订单、价格偏差' },
+  { key: 'finance', label: '财务分析师', icon: '💰', hint: '聚焦金额、成本、三路匹配' },
+  { key: 'supply', label: '供应链主管', icon: '📦', hint: '聚焦交付、库存、风险异常' },
+];
+
+const OPTIONS_STORAGE_KEY = 'erp-agent-input-options-v1';
+const SHORTCUT_STORAGE_KEY = 'erp-agent-input-shortcut-v1';
+const SOFT_PROTECT_MIN_LINES = 3;
+
+type SendShortcut = 'enter' | 'mod-enter';
+
+const DEFAULT_OPTIONS: SendOptions = {
+  role: 'general',
+  useMemory: true,
+  useExtData: false,
+};
+
+const loadOptions = (): SendOptions => {
+  if (typeof window === 'undefined') return DEFAULT_OPTIONS;
+  try {
+    const raw = localStorage.getItem(OPTIONS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<SendOptions>;
+      return { ...DEFAULT_OPTIONS, ...parsed };
+    }
+  } catch {
+    // ignore
+  }
+  return DEFAULT_OPTIONS;
+};
+
+const loadShortcut = (): SendShortcut => {
+  if (typeof window === 'undefined') return 'enter';
+  try {
+    const raw = localStorage.getItem(SHORTCUT_STORAGE_KEY);
+    if (raw === 'enter' || raw === 'mod-enter') return raw;
+  } catch {
+    // ignore
+  }
+  return 'enter';
+};
+
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform);
+const MOD_LABEL = isMac ? '⌘' : 'Ctrl';
+
+const formatMs = (ms: number): string => {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+};
+
+export default function InputBar({
+  onSend,
+  disabled,
+  lastDurationMs,
+  draftNonce,
+  draftText,
+  onOpenExamples,
+  onOpenTips,
+}: Props) {
   const [input, setInput] = useState('');
+  const [options, setOptions] = useState<SendOptions>(loadOptions);
+  const [sendShortcut, setSendShortcut] = useState<SendShortcut>(loadShortcut);
+  const [justSwitched, setJustSwitched] = useState(false);
+  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const roleMenuRef = useRef<HTMLDivElement>(null);
+
+  // 外部注入草稿（例如从示例问题库填入）
+  useEffect(() => {
+    if (draftNonce === undefined || draftText === undefined) return;
+    setInput(draftText);
+    // 等待下一帧 textarea 存在并可操作
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 180) + 'px';
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  }, [draftNonce, draftText]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(options));
+    } catch {
+      // ignore
+    }
+  }, [options]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SHORTCUT_STORAGE_KEY, sendShortcut);
+    } catch {
+      // ignore
+    }
+  }, [sendShortcut]);
 
   // Cmd/Ctrl + K 聚焦输入框
   useEffect(() => {
@@ -21,21 +139,68 @@ export default function InputBar({ onSend, disabled }: Props) {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // 点击外部关闭角色菜单
+  useEffect(() => {
+    if (!roleMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (roleMenuRef.current && !roleMenuRef.current.contains(e.target as Node)) {
+        setRoleMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [roleMenuOpen]);
+
+  const currentRole = useMemo(
+    () => ROLES.find(r => r.key === options.role) ?? ROLES[0],
+    [options.role]
+  );
+
   const handleSend = () => {
     const trimmed = input.trim();
     if (!trimmed || disabled) return;
-    onSend(trimmed);
+    onSend(trimmed, options);
     setInput('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+  const lineCount = useMemo(() => input.split('\n').length, [input]);
+  const softProtected = sendShortcut === 'enter' && lineCount >= SOFT_PROTECT_MIN_LINES;
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== 'Enter') return;
+    // IME composing：中文输入法确认候选词时也会触发 Enter，必须忽略
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    // Shift+Enter 永远插入换行
+    if (e.shiftKey) return;
+
+    const modKey = e.metaKey || e.ctrlKey;
+
+    if (sendShortcut === 'mod-enter') {
+      // 模式 B：只有 mod+Enter 发送，裸 Enter 插换行
+      if (modKey) {
+        e.preventDefault();
+        handleSend();
+      }
+      return;
     }
+
+    // 模式 A（默认）：Enter 发送，但长消息（≥3 行）软保护
+    if (softProtected && !modKey) {
+      // 让 Enter 正常插入换行（不 preventDefault）
+      return;
+    }
+
+    e.preventDefault();
+    handleSend();
+  };
+
+  const toggleSendShortcut = () => {
+    setSendShortcut(prev => (prev === 'enter' ? 'mod-enter' : 'enter'));
+    setJustSwitched(true);
+    window.setTimeout(() => setJustSwitched(false), 1800);
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -45,11 +210,136 @@ export default function InputBar({ onSend, disabled }: Props) {
     el.style.height = Math.min(el.scrollHeight, 180) + 'px';
   };
 
+  const handleNewPrompt = () => {
+    setInput('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.focus();
+    }
+  };
+
   const canSend = !disabled && input.trim().length > 0;
+  const charCount = input.length;
 
   return (
     <div className="input-bar">
       <div className={`input-wrapper ${disabled ? 'is-disabled' : ''}`}>
+        <div className="input-toolbar">
+          <div className="input-toolbar-left">
+            <div className="input-role" ref={roleMenuRef}>
+              <button
+                type="button"
+                className="input-role-trigger"
+                onClick={() => setRoleMenuOpen(v => !v)}
+                aria-haspopup="listbox"
+                aria-expanded={roleMenuOpen}
+              >
+                <span className="input-role-icon">{currentRole.icon}</span>
+                <span className="input-role-label">{currentRole.label}</span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {roleMenuOpen && (
+                <div className="input-role-menu" role="listbox">
+                  {ROLES.map(r => (
+                    <button
+                      key={r.key}
+                      type="button"
+                      role="option"
+                      aria-selected={r.key === options.role}
+                      className={`input-role-item ${r.key === options.role ? 'is-active' : ''}`}
+                      onClick={() => {
+                        setOptions(o => ({ ...o, role: r.key }));
+                        setRoleMenuOpen(false);
+                      }}
+                    >
+                      <span className="input-role-item-icon">{r.icon}</span>
+                      <div className="input-role-item-text">
+                        <div className="input-role-item-label">{r.label}</div>
+                        <div className="input-role-item-hint">{r.hint}</div>
+                      </div>
+                      {r.key === options.role && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <label
+              className={`input-toggle ${options.useMemory ? 'is-on' : ''}`}
+              title="开启后请求会携带当前会话的上下文；关闭则每次为独立查询"
+            >
+              <input
+                type="checkbox"
+                checked={options.useMemory}
+                onChange={e => setOptions(o => ({ ...o, useMemory: e.target.checked }))}
+              />
+              <span className="input-toggle-track">
+                <span className="input-toggle-thumb" />
+              </span>
+              <span className="input-toggle-label">上下文记忆</span>
+            </label>
+
+            <label
+              className={`input-toggle ${options.useExtData ? 'is-on' : ''}`}
+              title="开启后会在分析中参考外部市场价格等数据源"
+            >
+              <input
+                type="checkbox"
+                checked={options.useExtData}
+                onChange={e => setOptions(o => ({ ...o, useExtData: e.target.checked }))}
+              />
+              <span className="input-toggle-track">
+                <span className="input-toggle-thumb" />
+              </span>
+              <span className="input-toggle-label">外部数据</span>
+            </label>
+          </div>
+
+          <div className="input-toolbar-right">
+            {onOpenTips && (
+              <button
+                type="button"
+                className="input-examples-btn"
+                onClick={onOpenTips}
+                title="查看可用的测试数据（供应商、PO、编号范围）"
+              >
+                <span>💡</span>
+                测试数据
+              </button>
+            )}
+            {onOpenExamples && (
+              <button
+                type="button"
+                className="input-examples-btn"
+                onClick={onOpenExamples}
+                title="浏览示例问题库"
+              >
+                <span>📚</span>
+                示例
+              </button>
+            )}
+            <button
+              type="button"
+              className="input-new-prompt"
+              onClick={handleNewPrompt}
+              disabled={!input}
+              title="清空输入"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 2v6h-6" />
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+              </svg>
+              新提示
+            </button>
+          </div>
+        </div>
+
         <textarea
           ref={textareaRef}
           value={input}
@@ -59,10 +349,46 @@ export default function InputBar({ onSend, disabled }: Props) {
           disabled={disabled}
           rows={1}
         />
+
         <div className="input-actions">
-          <span className="input-hint">
-            <kbd>Enter</kbd> 发送 · <kbd>Shift + Enter</kbd> 换行
-          </span>
+          <div className="input-meta">
+            <button
+              type="button"
+              className="input-hint input-hint-button"
+              onClick={toggleSendShortcut}
+              title="点击切换发送快捷键"
+            >
+              {sendShortcut === 'enter' ? (
+                <>
+                  <kbd>Enter</kbd> 发送 · <kbd>Shift+Enter</kbd> 换行
+                </>
+              ) : (
+                <>
+                  <kbd>{MOD_LABEL}+Enter</kbd> 发送 · <kbd>Enter</kbd> 换行
+                </>
+              )}
+              {softProtected && (
+                <span className="input-hint-soft-protect" title="长消息软保护：按 Enter 将换行，发送请用 ⌘+Enter">
+                  · 长消息模式
+                </span>
+              )}
+            </button>
+            {justSwitched && (
+              <span className="input-shortcut-tip">
+                ✓ 已切换为
+                {sendShortcut === 'enter' ? ' Enter ' : ` ${MOD_LABEL}+Enter `}
+                发送
+              </span>
+            )}
+            <span className="input-meta-sep">·</span>
+            <span className="input-char-count">{charCount} 字</span>
+            {lastDurationMs !== undefined && lastDurationMs > 0 && (
+              <>
+                <span className="input-meta-sep">·</span>
+                <span className="input-last-duration">上次 {formatMs(lastDurationMs)}</span>
+              </>
+            )}
+          </div>
           <button
             onClick={handleSend}
             disabled={!canSend}

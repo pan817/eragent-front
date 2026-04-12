@@ -1,5 +1,6 @@
 // 测试数据说明 —— 用于 TestDataTipsButton 展示的静态内容
 // 数据来源：modules/p2p/mock_data/generator.py（seed=42）
+// 所有日期不超过当前日期（生成时自动截断）
 
 export interface SupplierRow {
   id: string;
@@ -48,12 +49,26 @@ export const MATERIALS: MaterialRow[] = [
 ];
 
 export const PO_FACTS: { label: string; value: string }[] = [
-  { label: '数量', value: '默认 50 笔' },
-  { label: '编号范围', value: 'PO-2024-0001 ~ PO-2024-0050' },
-  { label: '创建日期', value: '2024-03-01 ~ 2024-04-29' },
+  { label: '数量', value: '默认 500 笔' },
+  { label: '编号范围', value: 'PO-2024-0001 ~ PO-2024-0500' },
   { label: '币种', value: 'CNY' },
   { label: '状态', value: 'APPROVED' },
   { label: '订单数量范围', value: '100 ~ 5,000 件' },
+  { label: 'PO 创建日期范围', value: '2024-01-13 ~ 2026-02-11' },
+];
+
+export const PO_DATE_DISTRIBUTION: { label: string; value: string }[] = [
+  { label: '2026-01-01 ~ 2026-02-11（~60%）', value: '约 299 笔（近期数据）' },
+  { label: '2025-01-01 ~ 2025-12-31（~25%）', value: '约 126 笔（历史数据）' },
+  { label: '2024-01-01 ~ 2024-12-31（~15%）', value: '约 75 笔（早期数据）' },
+];
+
+export const PO_TIME_RANGE_HITS: { label: string; value: string }[] = [
+  { label: '7d（最近 7 天）', value: '少量收货/发票/付款（PO 创建不在此窗口）' },
+  { label: '30d（最近 30 天）', value: '部分收货/发票/付款（PO 创建至少在 60 天前）' },
+  { label: '90d（最近 90 天）', value: '约 221 笔 PO（44%），推荐使用' },
+  { label: '365d（最近一年）', value: '约 425 笔 PO（85%）' },
+  { label: '不传（默认 30d）', value: '同 30d' },
 ];
 
 export const PO_ANOMALIES: AnomalyNote[] = [
@@ -63,10 +78,14 @@ export const PO_ANOMALIES: AnomalyNote[] = [
   },
 ];
 
+export const PO_DATE_NOTE = 'PO 创建日期不会出现在最近 60 天内（预留给收货/发票/付款的日期偏移）';
+
 export const RECEIPT_FACTS: { label: string; value: string }[] = [
-  { label: '编号范围', value: 'RCV-2024-0001 ~ RCV-2024-0050' },
+  { label: '编号范围', value: 'RCV-2024-0001 ~ RCV-2024-0500' },
   { label: '与 PO 关系', value: '一一对应' },
-  { label: '收货日期', value: '2024-04-05 ~ 2024-05-19' },
+  { label: '收货日期', value: 'PO 创建日期 + 25~50 天（不超过今天）' },
+  { label: '日期范围', value: '2024-02-16 ~ 2026-04-01' },
+  { label: '承诺交期', value: 'PO 创建日期 + 20~45 天（不超过今天）' },
 ];
 
 export const RECEIPT_ANOMALIES: AnomalyNote[] = [
@@ -76,10 +95,11 @@ export const RECEIPT_ANOMALIES: AnomalyNote[] = [
 ];
 
 export const INVOICE_FACTS: { label: string; value: string }[] = [
-  { label: '编号范围', value: 'INV-2024-0001 ~ INV-2024-0050' },
-  { label: '发票日期', value: '2024-04-10 ~ 2024-05-24' },
-  { label: '到期日', value: '发票日期 + 30 天' },
-  { label: '折扣截止日', value: '发票日期 + 10 天' },
+  { label: '编号范围', value: 'INV-2024-0001 ~ INV-2024-0500' },
+  { label: '发票日期', value: 'PO 创建日期 + 30~55 天（不超过今天）' },
+  { label: '日期范围', value: '2024-02-16 ~ 2026-04-06' },
+  { label: '到期日', value: '发票日期 + 30 天（不超过今天）' },
+  { label: '折扣截止日', value: '发票日期 + 10 天（不超过今天）' },
   { label: '状态', value: 'VALIDATED' },
   { label: '付款条款', value: 'NET30' },
 ];
@@ -92,8 +112,10 @@ export const INVOICE_ANOMALIES: AnomalyNote[] = [
 ];
 
 export const PAYMENT_FACTS: { label: string; value: string }[] = [
-  { label: '编号范围', value: 'PAY-2024-0001 ~ PAY-2024-0050' },
+  { label: '编号范围', value: 'PAY-2024-0001 ~ PAY-2024-0500' },
   { label: '与发票关系', value: '一一对应' },
+  { label: '付款日期', value: '基于发票到期日偏移（不超过今天）' },
+  { label: '日期范围', value: '2024-03-15 ~ 2026-04-12' },
   { label: '付款方式', value: 'BANK_TRANSFER / CHECK（随机分配）' },
   { label: '正常付款时点', value: '到期日前 1~5 天支付' },
 ];
@@ -142,14 +164,51 @@ export const QUERY_SCENARIOS: ScenarioRow[] = [
       'SUP-001 的交货表现如何',
     ],
   },
+  {
+    scenario: '采购支出',
+    examples: [
+      '分析采购支出按品类分布',
+      '各供应商的采购额占比',
+    ],
+  },
+  {
+    scenario: '收货异常',
+    examples: [
+      '最近有没有超量收货或拒收',
+    ],
+  },
+  {
+    scenario: '发票重复',
+    examples: [
+      '检查有没有重复发票',
+    ],
+  },
+  {
+    scenario: '折扣利用率',
+    examples: [
+      '分析早付折扣的利用情况',
+    ],
+  },
+  {
+    scenario: 'PO 周期',
+    examples: [
+      '从下单到收货到付款要多久',
+    ],
+  },
+  {
+    scenario: '供应商集中度',
+    examples: [
+      '分析供应商集中度和采购依赖风险',
+    ],
+  },
 ];
 
 export const ID_CHIPS: IdChipGroup[] = [
   { label: '供应商', range: 'SUP-001 ~ SUP-005' },
-  { label: '采购订单', range: 'PO-2024-0001 ~ PO-2024-0050' },
-  { label: '收货单', range: 'RCV-2024-0001 ~ RCV-2024-0050' },
-  { label: '发票', range: 'INV-2024-0001 ~ INV-2024-0050' },
-  { label: '付款单', range: 'PAY-2024-0001 ~ PAY-2024-0050' },
+  { label: '采购订单', range: 'PO-2024-0001 ~ PO-2024-0500' },
+  { label: '收货单', range: 'RCV-2024-0001 ~ RCV-2024-0500' },
+  { label: '发票', range: 'INV-2024-0001 ~ INV-2024-0500' },
+  { label: '付款单', range: 'PAY-2024-0001 ~ PAY-2024-0500' },
   { label: '物料', range: 'MAT-001、MAT-002、CMP-001、CMP-002、PKG-001' },
 ];
 

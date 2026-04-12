@@ -14,8 +14,8 @@ import { SUGGESTIONS } from '../data/chatConstants';
 
 const DEFAULT_SEND_OPTIONS: SendOptions = {
   role: 'general',
-  useMemory: true,
-  useExtData: false,
+  outputMode: 'detailed',
+  timeRange: '',
 };
 
 interface ChatWindowProps {
@@ -39,6 +39,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
     filteredSessions,
     ensureRemoteSession,
     commitSessionFromAnalyze,
+    renameSession,
     isGuestMode,
   } = useChatSessions(userId);
 
@@ -162,6 +163,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
         onSearchChange={setSearch}
         onSwitchSession={handleSwitchSession}
         onDeleteSession={deleteSession}
+        onRenameSession={renameSession}
         onClearAll={clearAll}
         onLoginClick={() => setShowLogin(true)}
         onLogout={onLogout}
@@ -197,7 +199,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
                 className="examples-more-link"
                 onClick={() => setExamplesOpen(true)}
               >
-                示例太少？ 查看全部 28+ 问题库 →
+                示例太少？ 查看全部 56 条问题库 →
               </button>
             </div>
           )}

@@ -140,24 +140,9 @@
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 28px 20px 20px;
+  padding: 28px 20px 48px;
   background: var(--bg);
   scroll-behavior: smooth;
-  position: relative;
-}
-
-.chat-messages::after {
-  content: '';
-  position: sticky;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: block;
-  height: 48px;
-  margin-top: -48px;
-  background: linear-gradient(to bottom, transparent, var(--bg));
-  pointer-events: none;
-  z-index: 1;
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -791,6 +776,54 @@
 
 .toolbar-btn:active {
   transform: scale(0.96);
+}
+
+/* ---------- Export dropdown ---------- */
+.export-menu-wrap {
+  position: relative;
+}
+
+.export-dropdown {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+  padding: 4px;
+  z-index: 20;
+  animation: fadeIn var(--dur-fast) var(--ease-out);
+}
+
+.export-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.export-dropdown-item:hover {
+  background: var(--bg-subtle);
+  color: var(--brand-600);
+}
+
+.export-dropdown-item svg {
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.export-dropdown-item:hover svg {
+  color: var(--brand-500);
 }
 
 /* ---------- Severity badges ---------- */

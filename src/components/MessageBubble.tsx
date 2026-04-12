@@ -48,12 +48,29 @@ function LoadingStages() {
   );
 }
 
+function stripMarkdown(md: string): string {
+  return md
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^\s*[-*+]\s+/gm, '  - ')
+    .replace(/^\s*\d+\.\s+/gm, (m) => m)
+    .replace(/^>\s+/gm, '')
+    .replace(/---+/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export default function MessageBubble({ message, userId, onTraceClick, onRegenerate }: Props) {
   const isUser = message.role === 'user';
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'md' | 'text' | false>(false);
   const [retrying, setRetrying] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const prevStatus = useRef(message.status);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   // 当 status 从非 sending 变为 sending（重试触发），显示 retrying 态
   // 当 status 离开 sending（请求完成），清除 retrying 态
@@ -74,18 +91,61 @@ export default function MessageBubble({ message, userId, onTraceClick, onRegener
     };
   }, []);
 
-  const handleCopy = async () => {
+  // 点击外部关闭导出菜单
+  useEffect(() => {
+    if (!exportOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [exportOpen]);
+
+  const handleCopyMarkdown = async () => {
     try {
       await navigator.clipboard.writeText(message.content);
-      setCopied(true);
-      copyTimer.current = setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // ignore
-    }
+      setCopied('md');
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
+    } catch { /* ignore */ }
+    setExportOpen(false);
   };
 
+  const handleCopyPlainText = async () => {
+    try {
+      await navigator.clipboard.writeText(stripMarkdown(message.content));
+      setCopied('text');
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
+    } catch { /* ignore */ }
+    setExportOpen(false);
+  };
+
+  const handleExportPdf = () => {
+    const w = window.open('', '_blank');
+    if (!w) return;
+    // 找到当前消息渲染的 markdown 内容 DOM，克隆到新窗口用于打印
+    const el = document.querySelector(`[data-msg-id="${message.id}"] .markdown-body`);
+    const html = el ? el.innerHTML : `<pre>${message.content}</pre>`;
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>分析报告</title>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:40px;color:#1e293b;line-height:1.7;max-width:800px;margin:0 auto}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #e2e8f0;padding:8px 12px;text-align:left}th{background:#f1f5f9}
+pre{background:#f1f5f9;padding:12px;border-radius:6px;overflow-x:auto;font-size:13px}
+code{background:#f1f5f9;padding:2px 4px;border-radius:3px;font-size:13px}
+h1,h2,h3{margin-top:24px;margin-bottom:8px}
+@media print{body{padding:20px}}</style>
+</head><body>${html}</body></html>`);
+    w.document.close();
+    setTimeout(() => { w.print(); }, 300);
+    setExportOpen(false);
+  };
+
+
   return (
-    <div className={`message-row ${isUser ? 'message-row-user' : 'message-row-assistant'}`}>
+    <div className={`message-row ${isUser ? 'message-row-user' : 'message-row-assistant'}`} data-msg-id={message.id}>
       {isUser ? (
         <Avatar role="user" seed={userId} size={36} />
       ) : (
@@ -167,24 +227,57 @@ export default function MessageBubble({ message, userId, onTraceClick, onRegener
               </>
             )}
             <div className="toolbar-spacer" />
-            <button className="toolbar-btn" onClick={handleCopy} title="复制 Markdown">
-              {copied ? (
-                <>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  已复制
-                </>
-              ) : (
-                <>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                  </svg>
-                  复制
-                </>
+            <div className="export-menu-wrap" ref={exportRef}>
+              <button
+                className="toolbar-btn"
+                onClick={() => setExportOpen(v => !v)}
+                title="导出 / 复制"
+              >
+                {copied ? (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    {copied === 'md' ? '已复制 Markdown' : '已复制纯文本'}
+                  </>
+                ) : (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                      <polyline points="16 6 12 2 8 6" />
+                      <line x1="12" y1="2" x2="12" y2="15" />
+                    </svg>
+                    导出
+                  </>
+                )}
+              </button>
+              {exportOpen && (
+                <div className="export-dropdown">
+                  <button className="export-dropdown-item" onClick={handleCopyMarkdown}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                    复制 Markdown
+                  </button>
+                  <button className="export-dropdown-item" onClick={handleCopyPlainText}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
+                    </svg>
+                    复制纯文本
+                  </button>
+                  <button className="export-dropdown-item" onClick={handleExportPdf}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                      <rect x="6" y="14" width="12" height="8" />
+                    </svg>
+                    打印 / 导出 PDF
+                  </button>
+                </div>
               )}
-            </button>
+            </div>
             {onRegenerate && (
               <button className="toolbar-btn" onClick={() => onRegenerate(message.id)} title="重新生成">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

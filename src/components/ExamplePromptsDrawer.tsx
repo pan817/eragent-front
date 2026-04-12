@@ -30,9 +30,13 @@ function highlight(text: string, query: string): React.ReactNode {
   );
 }
 
+/** 默认显示的分类数（不含"全部"按钮），超出部分需展开 */
+const VISIBLE_CATEGORY_COUNT = 5;
+
 export default function ExamplePromptsDrawer({ open, onClose, onPick }: Props) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [chipsExpanded, setChipsExpanded] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // 打开时聚焦搜索框，关闭时清空
@@ -43,6 +47,7 @@ export default function ExamplePromptsDrawer({ open, onClose, onPick }: Props) {
     } else {
       setSearch('');
       setFilter('all');
+      setChipsExpanded(false);
     }
   }, [open]);
 
@@ -150,7 +155,7 @@ export default function ExamplePromptsDrawer({ open, onClose, onPick }: Props) {
           </div>
         </div>
 
-        <div className="examples-chips">
+        <div className={`examples-chips ${chipsExpanded ? 'is-expanded' : ''}`}>
           <button
             type="button"
             className={`examples-chip ${filter === 'all' ? 'is-active' : ''}`}
@@ -158,7 +163,7 @@ export default function ExamplePromptsDrawer({ open, onClose, onPick }: Props) {
           >
             全部 <span className="examples-chip-count">{categoryCounts.all}</span>
           </button>
-          {CATEGORIES.map(c => (
+          {(chipsExpanded ? CATEGORIES : CATEGORIES.slice(0, VISIBLE_CATEGORY_COUNT)).map(c => (
             <button
               key={c.key}
               type="button"
@@ -170,6 +175,30 @@ export default function ExamplePromptsDrawer({ open, onClose, onPick }: Props) {
               <span className="examples-chip-count">{categoryCounts[c.key] || 0}</span>
             </button>
           ))}
+          {CATEGORIES.length > VISIBLE_CATEGORY_COUNT && (
+            <button
+              type="button"
+              className="examples-chip examples-chip-toggle"
+              onClick={() => setChipsExpanded(v => !v)}
+            >
+              {chipsExpanded ? (
+                <>
+                  收起
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="18 15 12 9 6 15" />
+                  </svg>
+                </>
+              ) : (
+                <>
+                  更多
+                  <span className="examples-chip-count">{CATEGORIES.length - VISIBLE_CATEGORY_COUNT}</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         <div className="examples-body">

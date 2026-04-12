@@ -285,7 +285,21 @@
   gap: 4px;
 }
 
-.sidebar-history-item-delete {
+/* ---------- Action buttons (edit + delete) ---------- */
+.sidebar-history-item-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.sidebar-history-item:hover .sidebar-history-item-actions,
+.sidebar-history-item.is-active .sidebar-history-item-actions {
+  opacity: 1;
+}
+
+.sidebar-history-item-btn {
   width: 22px;
   height: 22px;
   border: none;
@@ -298,18 +312,40 @@
   justify-content: center;
   flex-shrink: 0;
   padding: 0;
-  opacity: 0;
   transition: all var(--dur-fast) var(--ease-out);
 }
 
-.sidebar-history-item:hover .sidebar-history-item-delete,
-.sidebar-history-item.is-active .sidebar-history-item-delete {
-  opacity: 1;
+.sidebar-history-item-edit-btn:hover {
+  background: var(--bg-muted);
+  color: var(--brand-600);
+}
+
+[data-theme='dark'] .sidebar-history-item-edit-btn:hover {
+  color: var(--brand-400);
 }
 
 .sidebar-history-item-delete:hover {
   background: var(--danger-bg);
   color: var(--danger);
+}
+
+/* ---------- Inline edit input ---------- */
+.sidebar-history-item-edit {
+  width: 100%;
+  padding: 3px 6px;
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--brand-400);
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  font-family: inherit;
+  outline: none;
+  box-shadow: var(--glow);
+}
+
+.sidebar-history-item-edit::placeholder {
+  color: var(--text-subtle);
 }
 
 /* ---------- Stats card ---------- */

@@ -169,20 +169,11 @@
 /* ---------- Category chips ---------- */
 .examples-chips {
   display: flex;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 6px 8px;
   padding: 12px 20px;
-  overflow-x: auto;
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
-  scrollbar-width: thin;
-}
-
-.examples-chips::-webkit-scrollbar {
-  height: 4px;
-}
-.examples-chips::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 2px;
 }
 
 .examples-chip {
@@ -205,6 +196,21 @@
 .examples-chip:hover {
   border-color: var(--brand-400);
   color: var(--text);
+}
+
+.examples-chip-toggle {
+  border-style: dashed;
+  color: var(--text-subtle);
+}
+
+.examples-chip-toggle:hover {
+  color: var(--brand-600);
+  border-color: var(--brand-400);
+  border-style: dashed;
+}
+
+[data-theme='dark'] .examples-chip-toggle:hover {
+  color: var(--brand-400);
 }
 
 .examples-chip.is-active {

@@ -3,6 +3,12 @@ export type PromptCategory =
   | 'price'
   | 'payment'
   | 'supplier'
+  | 'spending'
+  | 'receipt'
+  | 'invoice_dup'
+  | 'discount'
+  | 'po_cycle'
+  | 'concentration'
   | 'mixed'
   | 'context';
 
@@ -13,6 +19,8 @@ export interface ExamplePrompt {
   query: string;
   /** 当问题含具体 ID（如 SUP-001 / PO-2024-0035）时设 true：点击后填入输入框而不直接发送 */
   editable?: boolean;
+  /** 别名/口语同义表达，用于拼音与原文搜索的补充匹配 */
+  aliases?: string[];
 }
 
 export interface CategoryDef {
@@ -27,12 +35,18 @@ export const CATEGORIES: CategoryDef[] = [
   { key: 'price', label: '价格差异', icon: '💰', description: '实际价 vs 合同价偏差' },
   { key: 'payment', label: '付款合规', icon: '💳', description: '逾期、折扣、提前付款' },
   { key: 'supplier', label: '供应商绩效', icon: '📊', description: 'KPI、交付、质量' },
+  { key: 'spending', label: '采购支出', icon: '💵', description: '品类、供应商支出分布' },
+  { key: 'receipt', label: '收货异常', icon: '🚚', description: '超量收货、拒收、延迟' },
+  { key: 'invoice_dup', label: '发票重复', icon: '🧾', description: '重复发票与重复付款' },
+  { key: 'discount', label: '折扣利用率', icon: '🏷️', description: '早付折扣机会与损失' },
+  { key: 'po_cycle', label: 'PO 周期', icon: '⏱️', description: '下单到收货到付款耗时' },
+  { key: 'concentration', label: '供应商集中度', icon: '🎯', description: '采购依赖与单一来源风险' },
   { key: 'mixed', label: '综合分析', icon: '🧭', description: '跨领域探索性问题' },
   { key: 'context', label: '会话上下文', icon: '💭', description: '基于上次分析结果追问' },
 ];
 
 export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
-  // ---------- 三路匹配 ----------
+  // ========== 三路匹配 ==========
   {
     id: 'match-1',
     category: 'match',
@@ -65,7 +79,7 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     query: '分析三路匹配发票异常',
   },
 
-  // ---------- 价格差异 ----------
+  // ========== 价格差异 ==========
   {
     id: 'price-1',
     category: 'price',
@@ -105,7 +119,7 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     editable: true,
   },
 
-  // ---------- 付款合规 ----------
+  // ========== 付款合规 ==========
   {
     id: 'pay-1',
     category: 'payment',
@@ -137,7 +151,7 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     query: '分析最近60天的付款逾期',
   },
 
-  // ---------- 供应商绩效 ----------
+  // ========== 供应商绩效 ==========
   {
     id: 'sup-1',
     category: 'supplier',
@@ -180,7 +194,176 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     editable: true,
   },
 
-  // ---------- 综合 / 探索性 ----------
+  // ========== 采购支出分析 ==========
+  {
+    id: 'spend-1',
+    category: 'spending',
+    title: '采购支出品类分布',
+    query: '分析最近的采购支出分布，按品类统计花费情况',
+  },
+  {
+    id: 'spend-2',
+    category: 'spending',
+    title: '供应商采购支出占比',
+    query: '各供应商的采购支出占比分析',
+  },
+  {
+    id: 'spend-3',
+    category: 'spending',
+    title: '钱都花在哪些品类',
+    query: '钱都花在哪些品类上了',
+  },
+  {
+    id: 'spend-4',
+    category: 'spending',
+    title: '采购额度供应商排名',
+    query: '采购额度按供应商排名',
+  },
+  {
+    id: 'spend-5',
+    category: 'spending',
+    title: '月度采购支出统计',
+    query: '月度采购支出统计',
+  },
+
+  // ========== 收货异常分析 ==========
+  {
+    id: 'rcv-1',
+    category: 'receipt',
+    title: '超量收货与拒收排查',
+    query: '分析最近有没有超量收货或拒收的情况',
+  },
+  {
+    id: 'rcv-2',
+    category: 'receipt',
+    title: '指定供应商收货延迟与退货',
+    query: '检查 SUP-001 的收货延迟和退货记录',
+    editable: true,
+  },
+  {
+    id: 'rcv-3',
+    category: 'receipt',
+    title: '哪些订单超量收货',
+    query: '哪些订单超量收货了',
+  },
+  {
+    id: 'rcv-4',
+    category: 'receipt',
+    title: '入库与订单数量不一致',
+    query: '入库数量和订单数量对不上',
+  },
+  {
+    id: 'rcv-5',
+    category: 'receipt',
+    title: '验收不合格记录',
+    query: '最近有没有验收不合格的记录',
+  },
+
+  // ========== 发票重复检测 ==========
+  {
+    id: 'invdup-1',
+    category: 'invoice_dup',
+    title: '重复发票与重复付款',
+    query: '检查有没有重复发票或重复付款的情况',
+  },
+  {
+    id: 'invdup-2',
+    category: 'invoice_dup',
+    title: '同供应商重复开票',
+    query: '同一供应商重复开票检查',
+  },
+  {
+    id: 'invdup-3',
+    category: 'invoice_dup',
+    title: '有没有多付的发票',
+    query: '有没有多付的发票',
+  },
+  {
+    id: 'invdup-4',
+    category: 'invoice_dup',
+    title: '疑似重复发票排查',
+    query: '疑似重复的发票排查',
+  },
+
+  // ========== 折扣利用率分析 ==========
+  {
+    id: 'disc-1',
+    category: 'discount',
+    title: '早付折扣利用情况',
+    query: '分析早付折扣的利用情况，错过了多少折扣机会',
+  },
+  {
+    id: 'disc-2',
+    category: 'discount',
+    title: '折扣期未付款损失',
+    query: '折扣期内没付款损失了多少钱',
+  },
+  {
+    id: 'disc-3',
+    category: 'discount',
+    title: '现金折扣利用率',
+    query: '现金折扣的利用率是多少',
+  },
+  {
+    id: 'disc-4',
+    category: 'discount',
+    title: '哪些发票错过折扣',
+    query: '哪些发票错过了折扣',
+  },
+
+  // ========== PO 周期分析 ==========
+  {
+    id: 'cycle-1',
+    category: 'po_cycle',
+    title: '采购全流程周期耗时',
+    query: '分析采购订单从下单到收货到付款的周期耗时',
+  },
+  {
+    id: 'cycle-2',
+    category: 'po_cycle',
+    title: '处理最慢的订单',
+    query: '哪些订单处理最慢',
+  },
+  {
+    id: 'cycle-3',
+    category: 'po_cycle',
+    title: '采购到付款时长',
+    query: '从采购到付款要多长时间',
+  },
+  {
+    id: 'cycle-4',
+    category: 'po_cycle',
+    title: '采购效率分析',
+    query: '采购效率分析',
+  },
+
+  // ========== 供应商集中度分析 ==========
+  {
+    id: 'conc-1',
+    category: 'concentration',
+    title: '供应商集中度与依赖风险',
+    query: '分析供应商集中度和采购依赖风险，有没有单一来源',
+  },
+  {
+    id: 'conc-2',
+    category: 'concentration',
+    title: '单一来源品类',
+    query: '哪些品类只有一家供应商',
+  },
+  {
+    id: 'conc-3',
+    category: 'concentration',
+    title: '采购依赖最多的供应商',
+    query: '采购依赖哪些供应商最多',
+  },
+  {
+    id: 'conc-4',
+    category: 'concentration',
+    title: '供应商采购占比分析',
+    query: '供应商采购占比分析',
+  },
+
+  // ========== 综合 / 探索性分析 ==========
   {
     id: 'mix-1',
     category: 'mixed',
@@ -212,12 +395,26 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     query: 'SUP-001 质量投诉变多了，是否也影响了付款节奏',
     editable: true,
   },
+  {
+    id: 'mix-6',
+    category: 'mixed',
+    title: '销售部门业绩趋势',
+    query: '分析一下销售部门的业绩趋势',
+  },
 
-  // ---------- 会话上下文 ----------
+  // ========== 会话上下文 ==========
   {
     id: 'ctx-1',
     category: 'context',
     title: '上次最严重的异常',
     query: '上次分析中最严重的异常是哪个',
+    aliases: ['上一次最严重的异常'],
+  },
+  {
+    id: 'ctx-2',
+    category: 'context',
+    title: '上次分析结果',
+    query: '上次分析的结果呢',
+    aliases: ['上一次分析结果'],
   },
 ];

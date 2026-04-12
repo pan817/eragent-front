@@ -4,7 +4,10 @@ import {
   PAYMENT_TERMS,
   MATERIALS,
   PO_FACTS,
+  PO_DATE_DISTRIBUTION,
+  PO_TIME_RANGE_HITS,
   PO_ANOMALIES,
+  PO_DATE_NOTE,
   RECEIPT_FACTS,
   RECEIPT_ANOMALIES,
   INVOICE_FACTS,
@@ -73,7 +76,7 @@ function OverviewPanel() {
       <div className="tips-section">
         <SectionTitle emoji="🧭" title="数据速览" />
         <p className="tips-section-desc">
-          系统内置 5 家供应商、50 笔采购订单及其配套的收货单、发票、付款单，含若干预置异常场景供测试。
+          系统内置 5 家供应商、500 笔采购订单及其配套的收货单、发票、付款单，含若干预置异常场景供测试。所有日期不超过当前日期。
         </p>
         <div className="tips-kv-grid">
           <div className="tips-kv-card">
@@ -82,11 +85,11 @@ function OverviewPanel() {
           </div>
           <div className="tips-kv-card">
             <div className="tips-kv-label">采购订单</div>
-            <div className="tips-kv-value">50 笔 · APPROVED</div>
+            <div className="tips-kv-value">500 笔 · APPROVED</div>
           </div>
           <div className="tips-kv-card">
             <div className="tips-kv-label">收货 / 发票 / 付款</div>
-            <div className="tips-kv-value">各 50 条，一一对应</div>
+            <div className="tips-kv-value">各 500 条，一一对应</div>
           </div>
           <div className="tips-kv-card">
             <div className="tips-kv-label">随机种子</div>
@@ -157,6 +160,24 @@ function OrdersPanel() {
       <div className="tips-section">
         <SectionTitle emoji="📦" title="采购订单基本信息" />
         <FactGrid items={PO_FACTS} />
+      </div>
+
+      <div className="tips-section">
+        <SectionTitle emoji="📅" title="创建日期分布" />
+        <FactGrid items={PO_DATE_DISTRIBUTION} />
+      </div>
+
+      <div className="tips-section">
+        <SectionTitle emoji="⏱️" title="时间范围查询可命中" />
+        <FactGrid items={PO_TIME_RANGE_HITS} />
+        <div className="tips-anomaly-item" style={{ marginTop: 8 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          <div>{PO_DATE_NOTE}</div>
+        </div>
       </div>
 
       <div className="tips-section">

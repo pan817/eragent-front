@@ -1,19 +1,3 @@
-import type { AnalystRole } from '../components/InputBar';
-
-/** 不同角色视角的 prompt 前缀 */
-export const ROLE_PROMPT_PREFIX: Record<AnalystRole, string> = {
-  general: '',
-  procurement:
-    '请以【采购分析师】视角回答，重点关注供应商、采购订单、价格偏差与交付情况。问题：',
-  finance:
-    '请以【财务分析师】视角回答，重点关注金额、成本、应付与三路匹配合规性。问题：',
-  supply:
-    '请以【供应链主管】视角回答，重点关注交付及时率、库存风险与异常处置。问题：',
-};
-
-/** 开启外部数据时追加的提示词后缀 */
-export const EXT_DATA_HINT = '（请在分析中结合外部市场价格等参考数据）';
-
 export interface Suggestion {
   icon: string;
   title: string;

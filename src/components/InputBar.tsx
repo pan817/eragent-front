@@ -4,11 +4,13 @@ import type { ExamplePrompt } from '../data/examplePrompts';
 import './InputBar.css';
 
 export type AnalystRole = 'general' | 'procurement' | 'finance' | 'supply';
+export type OutputMode = 'detailed' | 'brief' | 'table';
+export type TimeRange = '' | '7d' | '30d' | '90d' | 'this_month' | 'last_month';
 
 export interface SendOptions {
   role: AnalystRole;
-  useMemory: boolean;
-  useExtData: boolean;
+  outputMode: OutputMode;
+  timeRange: TimeRange;
 }
 
 interface Props {
@@ -45,9 +47,35 @@ type SendShortcut = 'enter' | 'mod-enter';
 
 const DEFAULT_OPTIONS: SendOptions = {
   role: 'general',
-  useMemory: true,
-  useExtData: false,
+  outputMode: 'detailed',
+  timeRange: '',
 };
+
+interface OutputModeDef {
+  key: OutputMode;
+  label: string;
+  icon: string;
+}
+
+const OUTPUT_MODES: OutputModeDef[] = [
+  { key: 'detailed', label: '详细报告', icon: '📄' },
+  { key: 'brief', label: '简报摘要', icon: '📋' },
+  { key: 'table', label: '数据表格', icon: '📊' },
+];
+
+interface TimeRangeDef {
+  key: TimeRange;
+  label: string;
+}
+
+const TIME_RANGES: TimeRangeDef[] = [
+  { key: '', label: '不限时间' },
+  { key: '7d', label: '最近 7 天' },
+  { key: '30d', label: '最近 30 天' },
+  { key: '90d', label: '最近 90 天' },
+  { key: 'this_month', label: '本月' },
+  { key: 'last_month', label: '上月' },
+];
 
 const loadOptions = (): SendOptions => {
   if (typeof window === 'undefined') return DEFAULT_OPTIONS;
@@ -96,10 +124,14 @@ export default function InputBar({
   const [sendShortcut, setSendShortcut] = useState<SendShortcut>(loadShortcut);
   const [justSwitched, setJustSwitched] = useState(false);
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+  const [outputMenuOpen, setOutputMenuOpen] = useState(false);
+  const [timeMenuOpen, setTimeMenuOpen] = useState(false);
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const roleMenuRef = useRef<HTMLDivElement>(null);
+  const outputMenuRef = useRef<HTMLDivElement>(null);
+  const timeMenuRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef(0); // 追踪 requestAnimationFrame，卸载时取消
 
   // "/" 斜杠命令：检测输���是否以 "/" 开头
@@ -186,17 +218,24 @@ export default function InputBar({
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // 点击外部关闭角色菜单
+  // 点击外部关闭下拉菜单
   useEffect(() => {
-    if (!roleMenuOpen) return;
+    if (!roleMenuOpen && !outputMenuOpen && !timeMenuOpen) return;
     const handler = (e: MouseEvent) => {
-      if (roleMenuRef.current && !roleMenuRef.current.contains(e.target as Node)) {
+      const t = e.target as Node;
+      if (roleMenuOpen && roleMenuRef.current && !roleMenuRef.current.contains(t)) {
         setRoleMenuOpen(false);
+      }
+      if (outputMenuOpen && outputMenuRef.current && !outputMenuRef.current.contains(t)) {
+        setOutputMenuOpen(false);
+      }
+      if (timeMenuOpen && timeMenuRef.current && !timeMenuRef.current.contains(t)) {
+        setTimeMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [roleMenuOpen]);
+  }, [roleMenuOpen, outputMenuOpen, timeMenuOpen]);
 
   const currentRole = useMemo(
     () => ROLES.find(r => r.key === options.role) ?? ROLES[0],
@@ -371,35 +410,93 @@ export default function InputBar({
               )}
             </div>
 
-            <label
-              className={`input-toggle ${options.useMemory ? 'is-on' : ''}`}
-              title="开启后请求会携带当前会话的上下文；关闭则每次为独立查询"
-            >
-              <input
-                type="checkbox"
-                checked={options.useMemory}
-                onChange={e => setOptions(o => ({ ...o, useMemory: e.target.checked }))}
-              />
-              <span className="input-toggle-track">
-                <span className="input-toggle-thumb" />
-              </span>
-              <span className="input-toggle-label">上下文记忆</span>
-            </label>
+            <div className="input-role" ref={outputMenuRef}>
+              <button
+                type="button"
+                className="input-role-trigger"
+                onClick={() => setOutputMenuOpen(v => !v)}
+                aria-expanded={outputMenuOpen}
+                title="选择输出格式"
+              >
+                <span className="input-role-icon">
+                  {OUTPUT_MODES.find(m => m.key === options.outputMode)?.icon}
+                </span>
+                <span className="input-role-label">
+                  {OUTPUT_MODES.find(m => m.key === options.outputMode)?.label}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+              </button>
+              {outputMenuOpen && (
+                <div className="input-role-menu" role="listbox">
+                  {OUTPUT_MODES.map(m => (
+                    <button
+                      key={m.key}
+                      type="button"
+                      role="option"
+                      aria-selected={m.key === options.outputMode}
+                      className={`input-role-item ${m.key === options.outputMode ? 'is-active' : ''}`}
+                      onClick={() => {
+                        setOptions(o => ({ ...o, outputMode: m.key }));
+                        setOutputMenuOpen(false);
+                      }}
+                    >
+                      <span className="input-role-item-icon">{m.icon}</span>
+                      <div className="input-role-item-text">
+                        <div className="input-role-item-label">{m.label}</div>
+                      </div>
+                      {m.key === options.outputMode && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-            <label
-              className={`input-toggle ${options.useExtData ? 'is-on' : ''}`}
-              title="开启后会在分析中参考外部市场价格等数据源"
-            >
-              <input
-                type="checkbox"
-                checked={options.useExtData}
-                onChange={e => setOptions(o => ({ ...o, useExtData: e.target.checked }))}
-              />
-              <span className="input-toggle-track">
-                <span className="input-toggle-thumb" />
-              </span>
-              <span className="input-toggle-label">外部数据</span>
-            </label>
+            <div className="input-role" ref={timeMenuRef}>
+              <button
+                type="button"
+                className="input-role-trigger"
+                onClick={() => setTimeMenuOpen(v => !v)}
+                aria-expanded={timeMenuOpen}
+                title="选择时间范围"
+              >
+                <span className="input-role-icon">📅</span>
+                <span className="input-role-label">
+                  {TIME_RANGES.find(t => t.key === options.timeRange)?.label}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+              </button>
+              {timeMenuOpen && (
+                <div className="input-role-menu" role="listbox">
+                  {TIME_RANGES.map(t => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      role="option"
+                      aria-selected={t.key === options.timeRange}
+                      className={`input-role-item ${t.key === options.timeRange ? 'is-active' : ''}`}
+                      onClick={() => {
+                        setOptions(o => ({ ...o, timeRange: t.key }));
+                        setTimeMenuOpen(false);
+                      }}
+                    >
+                      <div className="input-role-item-text">
+                        <div className="input-role-item-label">{t.label}</div>
+                      </div>
+                      {t.key === options.timeRange && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
 
           <div className="input-toolbar-right">

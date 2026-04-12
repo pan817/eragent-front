@@ -14,6 +14,7 @@ import {
   getSession as apiGetSession,
   listSessions as apiListSessions,
   searchSessions as apiSearchSessions,
+  updateSessionTitle as apiUpdateSessionTitle,
 } from '../services/chatSessions';
 
 export type ChatSession = FrontendSession;
@@ -137,6 +138,8 @@ export interface UseChatSessionsReturn {
   ensureRemoteSession: () => Promise<string>;
   /** /analyze 返回后调用：用 res.session 刷新本地 session 元信息 */
   commitSessionFromAnalyze: (apiSession: ApiChatSession) => void;
+  /** 重命名会话标题（乐观更新 + 调后端 PATCH）；设 titleAuto=false 防止后端自动覆盖 */
+  renameSession: (id: string, newTitle: string) => void;
 }
 
 // ============================================
@@ -207,10 +210,21 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
           setSessions([empty]);
           setCurrentId(empty.id);
         } else {
+          const firstId = remoteSessions[0].id;
+          // 立即加载第一个会话的消息，避免侧边栏选中但主区域显示欢迎页
+          try {
+            const detail = await apiGetSession(userId, firstId);
+            if (cancelled) return;
+            const msgs = detail.messages.map(fromApiMessage).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+            remoteSessions[0] = fromApiSession(detail.session, msgs);
+            detailLoadedRef.current = new Set([firstId]);
+          } catch {
+            // 消息加载失败不阻塞，降级为空消息（显示欢迎页）
+            detailLoadedRef.current = new Set();
+          }
           setSessions(remoteSessions);
-          setCurrentId(remoteSessions[0].id);
+          setCurrentId(firstId);
         }
-        detailLoadedRef.current = new Set();
         setIsGuestMode(false);
       } catch (err) {
         if (cancelled) return;
@@ -310,7 +324,7 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
 
       apiGetSession(userId, id)
         .then(resp => {
-          const msgs = resp.messages.map(fromApiMessage);
+          const msgs = resp.messages.map(fromApiMessage).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
           const s = fromApiSession(resp.session, msgs);
           setSessions(prev => prev.map(x => (x.id === id ? s : x)));
           detailLoadedRef.current.add(id);
@@ -438,6 +452,28 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
   }, []);
 
   // ============================================
+  // renameSession
+  // ============================================
+  const renameSession = useCallback(
+    (id: string, newTitle: string) => {
+      const trimmed = newTitle.trim();
+      if (!trimmed) return;
+      // 乐观更新
+      setSessions(prev =>
+        prev.map(s =>
+          s.id === id ? { ...s, title: trimmed, titleAuto: false } : s
+        )
+      );
+      if (isGuestMode || userId === null) return;
+      if (isTempId(id)) return;
+      apiUpdateSessionTitle(userId, id, trimmed).catch(err => {
+        console.error('[useChatSessions] renameSession failed:', err);
+      });
+    },
+    [isGuestMode, userId]
+  );
+
+  // ============================================
   // search（guest 本地过滤 / online debounce 调接口）
   // ============================================
   const setSearch = useCallback((s: string) => {
@@ -503,6 +539,7 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
     filteredSessions,
     ensureRemoteSession,
     commitSessionFromAnalyze,
+    renameSession,
   };
 }
 

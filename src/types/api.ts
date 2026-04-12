@@ -2,6 +2,12 @@ export interface AnalyzeRequest {
   query: string;
   user_id: string;
   session_id: string;
+  /** 分析师角色：后端据此切换 system prompt / 分析侧重 */
+  analyst_role?: 'general' | 'procurement' | 'finance' | 'supply';
+  /** 输出模式：detailed（默认详细报告）/ brief（简报摘要）/ table（数据表格） */
+  output_mode?: 'detailed' | 'brief' | 'table';
+  /** 时间范围过滤：7d / 30d / 90d / this_month / last_month；不传则不限 */
+  time_range?: string;
   /** 后端自动落库 user + assistant 两条消息；guest 模式传 false */
   auto_persist?: boolean;
   /** 对某条 assistant 消息重新生成，后端更新该消息而不是新建 */

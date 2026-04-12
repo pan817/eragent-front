@@ -2,7 +2,6 @@ import { useState, useCallback, useRef } from 'react';
 import type { ChatMessage, ApiChatSession } from '../types/api';
 import { analyzeQuery } from '../services/api';
 import type { SendOptions } from '../components/InputBar';
-import { ROLE_PROMPT_PREFIX, EXT_DATA_HINT } from '../data/chatConstants';
 
 /** 生成唯一 ID（优先 crypto.randomUUID，降级到时间戳+随机数） */
 const genId = () =>
@@ -12,8 +11,8 @@ const genId = () =>
 
 const DEFAULT_SEND_OPTIONS: SendOptions = {
   role: 'general',
-  useMemory: true,
-  useExtData: false,
+  outputMode: 'detailed',
+  timeRange: '',
 };
 
 interface UseMessageSendingParams {
@@ -126,26 +125,23 @@ export function useMessageSending({
       sendSessionId = realSessionId;
     }
 
-    // 2. 拼 prompt
-    const prefix = ROLE_PROMPT_PREFIX[options.role] || '';
-    const suffix = options.useExtData ? EXT_DATA_HINT : '';
-    const fullQuery = `${prefix}${query}${suffix}`;
-    const effectiveSessionId = options.useMemory ? realSessionId : `oneshot-${genId()}`;
-    const shouldPersist = options.useMemory && !isGuestMode;
+    // 2. 构造请求
+    const fullQuery = query;
+    const effectiveSessionId = realSessionId;
+    const shouldPersist = !isGuestMode;
 
     try {
       const res = await analyzeQuery({
         query: fullQuery,
         user_id: userId,
         session_id: effectiveSessionId,
+        analyst_role: options.role,
+        output_mode: options.outputMode,
+        time_range: options.timeRange || undefined,
         auto_persist: shouldPersist,
         client_user_message_id: clientUserId,
         client_assistant_message_id: clientAssistantId,
-        metadata: {
-          analyst_role: options.role,
-          use_memory: options.useMemory,
-          use_ext_data: options.useExtData,
-        },
+        metadata: {},
       });
 
       const content =

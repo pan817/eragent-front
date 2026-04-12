@@ -5,6 +5,7 @@ import {
   type ExamplePrompt,
   type PromptCategory,
 } from '../data/examplePrompts';
+import { matchPinyin } from '../utils/pinyinMatch';
 import './SlashCommandPanel.css';
 
 interface Props {
@@ -21,10 +22,12 @@ export default function SlashCommandPanel({ filter, activeIndex, onPick }: Props
   const listRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
-    const q = filter.toLowerCase();
-    if (!q) return EXAMPLE_PROMPTS;
+    if (!filter) return EXAMPLE_PROMPTS;
     return EXAMPLE_PROMPTS.filter(
-      p => p.title.toLowerCase().includes(q) || p.query.toLowerCase().includes(q)
+      p =>
+        matchPinyin(p.title, filter) ||
+        matchPinyin(p.query, filter) ||
+        (p.aliases?.some(a => matchPinyin(a, filter)) ?? false)
     );
   }, [filter]);
 
@@ -102,9 +105,11 @@ export default function SlashCommandPanel({ filter, activeIndex, onPick }: Props
 
 /** 工具函数：返回过滤后的示例列表，供 InputBar 计算 activeIndex 用 */
 export function getFilteredPrompts(filter: string): ExamplePrompt[] {
-  const q = filter.toLowerCase();
-  if (!q) return EXAMPLE_PROMPTS;
+  if (!filter) return EXAMPLE_PROMPTS;
   return EXAMPLE_PROMPTS.filter(
-    p => p.title.toLowerCase().includes(q) || p.query.toLowerCase().includes(q)
+    p =>
+      matchPinyin(p.title, filter) ||
+      matchPinyin(p.query, filter) ||
+      (p.aliases?.some(a => matchPinyin(a, filter)) ?? false)
   );
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage } from '../types/api';
 import type { ChatSession } from '../hooks/useChatSessions';
 import ThemeToggle from './ThemeToggle';
@@ -16,6 +16,7 @@ interface SidebarProps {
   onSearchChange: (v: string) => void;
   onSwitchSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
+  onRenameSession: (id: string, newTitle: string) => void;
   onClearAll: () => void;
   onLoginClick: () => void;
   onLogout: () => void;
@@ -46,12 +47,44 @@ export default function Sidebar({
   onSearchChange,
   onSwitchSession,
   onDeleteSession,
+  onRenameSession,
   onClearAll,
   onLoginClick,
   onLogout,
   onNewChat,
 }: SidebarProps) {
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  // 进入编辑态时聚焦并全选
+  useEffect(() => {
+    if (editingId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingId]);
+
+  const startEditing = (id: string, currentTitle: string) => {
+    setEditingId(id);
+    setEditingTitle(currentTitle);
+  };
+
+  const commitEdit = () => {
+    if (!editingId) return;
+    const trimmed = editingTitle.trim();
+    if (trimmed && trimmed !== editingId) {
+      onRenameSession(editingId, trimmed);
+    }
+    setEditingId(null);
+    setEditingTitle('');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingTitle('');
+  };
 
   const stats = useMemo(() => {
     const assistantMsgs = messages.filter(m => m.role === 'assistant' && m.status === 'success');
@@ -154,38 +187,84 @@ export default function Sidebar({
               s.messages.length > 0
                 ? s.messages.filter(m => m.role === 'user').length
                 : Math.max(1, Math.ceil(s.messageCount / 2));
+            const isEditing = editingId === s.id;
             return (
               <button
                 key={s.id}
                 type="button"
                 className={`sidebar-history-item ${isActive ? 'is-active' : ''}`}
-                onClick={() => onSwitchSession(s.id)}
+                onClick={() => {
+                  if (!isEditing) onSwitchSession(s.id);
+                }}
+                onDoubleClick={e => {
+                  e.stopPropagation();
+                  if (!isEmpty) startEditing(s.id, s.title);
+                }}
               >
                 <div className="sidebar-history-item-main">
-                  <div className="sidebar-history-item-title">
-                    {isEmpty ? <span className="is-muted">新对话</span> : s.title}
-                  </div>
-                  <div className="sidebar-history-item-meta">
-                    <span>{formatRelativeTime(s.updatedAt)}</span>
-                    {!isEmpty && <span>· {userMsgCount} 条</span>}
-                  </div>
+                  {isEditing ? (
+                    <input
+                      ref={editInputRef}
+                      type="text"
+                      className="sidebar-history-item-edit"
+                      value={editingTitle}
+                      onChange={e => setEditingTitle(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
+                        if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+                        e.stopPropagation();
+                      }}
+                      onBlur={commitEdit}
+                      onClick={e => e.stopPropagation()}
+                      maxLength={80}
+                    />
+                  ) : (
+                    <div className="sidebar-history-item-title">
+                      {isEmpty ? <span className="is-muted">新对话</span> : s.title}
+                    </div>
+                  )}
+                  {!isEditing && (
+                    <div className="sidebar-history-item-meta">
+                      <span>{formatRelativeTime(s.updatedAt)}</span>
+                      {!isEmpty && <span>· {userMsgCount} 条</span>}
+                    </div>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  className="sidebar-history-item-delete"
-                  onClick={e => {
-                    e.stopPropagation();
-                    onDeleteSession(s.id);
-                  }}
-                  aria-label="删除对话"
-                  title="删除对话"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                    <path d="M10 11v6M14 11v6" />
-                  </svg>
-                </button>
+                {!isEditing && (
+                  <div className="sidebar-history-item-actions">
+                    <button
+                      type="button"
+                      className="sidebar-history-item-btn sidebar-history-item-edit-btn"
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (!isEmpty) startEditing(s.id, s.title);
+                      }}
+                      aria-label="重命名对话"
+                      title="重命名"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="sidebar-history-item-btn sidebar-history-item-delete"
+                      onClick={e => {
+                        e.stopPropagation();
+                        onDeleteSession(s.id);
+                      }}
+                      aria-label="删除对话"
+                      title="删除对话"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6M14 11v6" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
               </button>
             );
           })

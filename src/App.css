@@ -1169,7 +1169,7 @@
 /* ---------- Trace summary ---------- */
 .trace-summary {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 10px;
   margin-bottom: 16px;
 }
@@ -2637,3 +2637,222 @@ code.gantt-detail-value {
   0%, 40% { background: rgba(251, 191, 36, 0.25); }
   100% { background: transparent; }
 }
+
+/* ============================================
+ * Token 分析区块
+ * ============================================ */
+
+.token-analysis-section,
+.token-trend-section {
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.token-section-title {
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border);
+}
+
+.token-analysis-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px;
+}
+
+.token-budgets {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 260px;
+}
+
+/* Context Budget 饼图卡片 */
+.budget-pie-card {
+  flex: 1;
+  min-width: 260px;
+  max-width: 400px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px;
+  background: var(--bg-elevated);
+}
+
+.budget-pie-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.budget-pie-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.budget-pie-route {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: var(--r-full);
+  background: var(--brand-gradient-soft);
+  color: var(--brand-600);
+  font-weight: 500;
+}
+
+.budget-pie-pct {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--success);
+}
+
+.budget-pie-pct.token-danger {
+  color: var(--danger);
+}
+
+.budget-pie-detail {
+  font-size: 11px;
+  color: var(--text-subtle);
+  text-align: center;
+  margin-top: 4px;
+}
+
+.budget-pie-note {
+  display: block;
+  margin-top: 2px;
+  font-style: italic;
+}
+
+/* Model Token 汇总表 */
+.model-token-table-wrap {
+  flex: 1;
+  min-width: 320px;
+  overflow-x: auto;
+}
+
+.model-token-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.model-token-table th {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+
+.model-token-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.model-token-row {
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.model-token-row:hover {
+  background: var(--bg-subtle);
+}
+
+.model-token-name {
+  font-weight: 600;
+  color: #10b981;
+}
+
+.model-token-idx {
+  margin-left: 4px;
+  font-size: 10px;
+  color: var(--text-subtle);
+}
+
+.model-token-total td {
+  font-weight: 700;
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+  color: var(--text);
+}
+
+/* Token 告警色 */
+.summary-value.token-danger {
+  color: var(--danger);
+  background: var(--danger-bg);
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+}
+
+/* Token 趋势图 */
+.token-trend-section {
+  padding-bottom: 12px;
+}
+
+.token-trend-section .recharts-wrapper {
+  padding: 8px 4px;
+}
+
+/* 饼图区域 */
+.token-pie-area {
+  flex: 1;
+  min-width: 260px;
+}
+
+/* 饼图 Tab 栏 */
+.pie-tab-bar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.pie-tab {
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+  white-space: nowrap;
+}
+
+.pie-tab:hover {
+  background: var(--bg-muted);
+  color: var(--text);
+}
+
+.pie-tab.is-active {
+  background: var(--brand-gradient-soft);
+  color: var(--brand-600);
+  border-color: var(--brand-200);
+  font-weight: 600;
+}
+
+.pie-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-subtle);
+  font-size: 13px;
+}
+

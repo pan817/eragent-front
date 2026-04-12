@@ -251,7 +251,13 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
       <TestDataTipsModal open={tipsOpen} onClose={() => setTipsOpen(false)} />
 
       {activeTraceId && (
-        <TraceModal traceId={activeTraceId} onClose={() => setActiveTraceId(null)} />
+        <TraceModal
+          traceId={activeTraceId}
+          onClose={() => setActiveTraceId(null)}
+          sessionTraceIds={messages
+            .filter(m => m.role === 'assistant' && m.traceId)
+            .map(m => m.traceId!)}
+        />
       )}
 
       {showLogin && (

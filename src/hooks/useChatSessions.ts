@@ -166,7 +166,6 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
   const [search, setSearchState] = useState('');
   const [serverSearchResults, setServerSearchResults] = useState<ChatSession[] | null>(null);
 
-  const prevUserIdRef = useRef<string | null>(userId);
   const currentIdRef = useRef(currentId);
   currentIdRef.current = currentId;
   const detailLoadedRef = useRef<Set<string>>(new Set());
@@ -183,9 +182,6 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
   // 初始化 / userId 变化 → 重新拉列表
   // ============================================
   useEffect(() => {
-    const prev = prevUserIdRef.current;
-    prevUserIdRef.current = userId;
-
     if (userId === null) {
       // 登出：回到 guest
       setIsGuestMode(true);

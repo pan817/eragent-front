@@ -59,6 +59,31 @@ export interface TraceSpan {
   error: string | null;
 }
 
+export interface ContextBudget {
+  total_inject_tokens: number;
+  model_context_limit: number;
+  budget_usage_pct: number;
+  route_type?: string;
+  note?: string;
+  /** 其余字段因路由类型而异，如 report_template_tokens / system_prompt_tokens 等 */
+  [key: string]: unknown;
+}
+
+export interface TokenSummary {
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  peak_prompt_tokens: number;
+  context_budget?: ContextBudget;
+}
+
+export interface ModelUsage {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  input_token_details?: Record<string, unknown>;
+  output_token_details?: Record<string, unknown>;
+}
+
 export interface TraceResponse {
   trace_id: string;
   agent_name: string;
@@ -71,6 +96,7 @@ export interface TraceResponse {
   model_call_count: number;
   tool_call_count: number;
   error: string | null;
+  token_summary?: TokenSummary;
   spans: TraceSpan[];
 }
 

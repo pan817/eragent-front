@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { ChatMessage } from '../types/api';
 import MarkdownContent from './MarkdownContent';
 import Avatar from './Avatar';
@@ -17,6 +17,9 @@ const LOADING_STAGES = [
   '✍️ 正在生成分析报告...',
 ];
 
+/** 每条 loading 阶段文字的展示时长（ms） */
+const LOADING_STAGE_INTERVAL = 1800;
+
 function formatRelativeTime(date: Date): string {
   const diff = (Date.now() - date.getTime()) / 1000;
   if (diff < 10) return '刚刚';
@@ -31,7 +34,7 @@ function LoadingStages() {
   useEffect(() => {
     const timer = setInterval(() => {
       setStageIdx(i => (i + 1) % LOADING_STAGES.length);
-    }, 1800);
+    }, LOADING_STAGE_INTERVAL);
     return () => clearInterval(timer);
   }, []);
 
@@ -48,12 +51,34 @@ function LoadingStages() {
 export default function MessageBubble({ message, userId, onTraceClick, onRegenerate }: Props) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const prevStatus = useRef(message.status);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 当 status 从非 sending 变为 sending（重试触发），显示 retrying 态
+  // 当 status 离开 sending（请求完成），清除 retrying 态
+  useEffect(() => {
+    if (prevStatus.current !== 'sending' && message.status === 'sending') {
+      setRetrying(true);
+    }
+    if (prevStatus.current === 'sending' && message.status !== 'sending') {
+      setRetrying(false);
+    }
+    prevStatus.current = message.status;
+  }, [message.status]);
+
+  // 清理 copy 计时器，避免卸载后 setState
+  useEffect(() => {
+    return () => {
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+    };
+  }, []);
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(message.content);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      copyTimer.current = setTimeout(() => setCopied(false), 1500);
     } catch {
       // ignore
     }
@@ -73,26 +98,41 @@ export default function MessageBubble({ message, userId, onTraceClick, onRegener
           ) : message.status === 'sending' ? (
             <LoadingStages />
           ) : message.status === 'error' ? (
-            <div className="error-box">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              <span>{message.content}</span>
+            <div className="error-block">
+              <div className="error-block-content">
+                <svg className="error-block-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span>{message.content}</span>
+              </div>
+              <div className="error-block-hint">请稍后重试，或检查网络连接</div>
               {onRegenerate && (
-                <button
-                  type="button"
-                  className="error-retry-btn"
-                  onClick={() => onRegenerate(message.id)}
-                  title="重新发送该问题"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-9-9 9 9 0 0 1 9-9c2.5 0 4.8 1 6.5 2.6L21 8" />
-                    <path d="M21 3v5h-5" />
-                  </svg>
-                  重试
-                </button>
+                <div className="error-block-actions">
+                  <span className="error-block-time">{formatRelativeTime(message.timestamp)}</span>
+                  <button
+                    type="button"
+                    className="error-block-retry"
+                    onClick={() => onRegenerate(message.id)}
+                    disabled={retrying}
+                  >
+                    {retrying ? (
+                      <>
+                        <span className="error-retry-spinner" />
+                        重试中...
+                      </>
+                    ) : (
+                      <>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-9-9 9 9 0 0 1 9-9c2.5 0 4.8 1 6.5 2.6L21 8" />
+                          <path d="M21 3v5h-5" />
+                        </svg>
+                        点击重试
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
             </div>
           ) : (

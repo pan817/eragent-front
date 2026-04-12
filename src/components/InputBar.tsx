@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import SlashCommandPanel, { getFilteredPrompts } from './SlashCommandPanel';
+import type { ExamplePrompt } from '../data/examplePrompts';
 import './InputBar.css';
 
 export type AnalystRole = 'general' | 'procurement' | 'finance' | 'supply';
@@ -36,6 +38,7 @@ const ROLES: RoleDef[] = [
 
 const OPTIONS_STORAGE_KEY = 'erp-agent-input-options-v1';
 const SHORTCUT_STORAGE_KEY = 'erp-agent-input-shortcut-v1';
+/** 消息行数 ≥ 此值时启用"长消息软保护"：裸 Enter 插换行而非发送 */
 const SOFT_PROTECT_MIN_LINES = 3;
 
 type SendShortcut = 'enter' | 'mod-enter';
@@ -93,15 +96,59 @@ export default function InputBar({
   const [sendShortcut, setSendShortcut] = useState<SendShortcut>(loadShortcut);
   const [justSwitched, setJustSwitched] = useState(false);
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+  const [slashOpen, setSlashOpen] = useState(false);
+  const [slashIndex, setSlashIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const roleMenuRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef(0); // 追踪 requestAnimationFrame，卸载时取消
+
+  // "/" 斜杠命令：检测输���是否以 "/" 开头
+  const slashFilter = useMemo(() => {
+    if (!slashOpen) return '';
+    // 输入 "/xxx" → 过滤关键词为 "xxx"
+    return input.startsWith('/') ? input.slice(1) : '';
+  }, [slashOpen, input]);
+
+  const slashFiltered = useMemo(
+    () => slashOpen ? getFilteredPrompts(slashFilter) : [],
+    [slashOpen, slashFilter]
+  );
+
+  // 当过滤结果变化时重置索引
+  useEffect(() => {
+    setSlashIndex(0);
+  }, [slashFilter]);
+
+  // 卸载时取消 rAF
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+
+  const handleSlashPick = useCallback((p: ExamplePrompt) => {
+    setSlashOpen(false);
+    if (p.editable) {
+      // 含参数：填入输入框，等用户修改后再发送
+      setInput(p.query);
+      rafRef.current = requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.style.height = 'auto';
+        el.style.height = Math.min(el.scrollHeight, 180) + 'px';
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      });
+    } else {
+      // 直接发送
+      setInput('');
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      onSend(p.query, options);
+    }
+  }, [onSend, options]);
 
   // 外部注入草稿（例如从示例问题库填入）
   useEffect(() => {
     if (draftNonce === undefined || draftText === undefined) return;
     setInput(draftText);
     // 等待下一帧 textarea 存在并可操作
-    requestAnimationFrame(() => {
+    rafRef.current = requestAnimationFrame(() => {
       const el = textareaRef.current;
       if (!el) return;
       el.style.height = 'auto';
@@ -161,6 +208,7 @@ export default function InputBar({
     if (!trimmed || disabled) return;
     onSend(trimmed, options);
     setInput('');
+    setSlashOpen(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
@@ -170,9 +218,46 @@ export default function InputBar({
   const softProtected = sendShortcut === 'enter' && lineCount >= SOFT_PROTECT_MIN_LINES;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key !== 'Enter') return;
-    // IME composing：中文输入法确认候选词时也会触发 Enter，必须忽略
+    // IME composing：中文输入法确认候选词时也会触发，必须忽略
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+
+    // "/" 斜杠面板打开时，拦截方向键、Enter、Esc
+    if (slashOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashIndex(i => (i + 1) % Math.max(slashFiltered.length, 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashIndex(i => (i - 1 + Math.max(slashFiltered.length, 1)) % Math.max(slashFiltered.length, 1));
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (slashFiltered.length > 0) {
+          handleSlashPick(slashFiltered[slashIndex]);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSlashOpen(false);
+        return;
+      }
+      // Tab 也可以确认选中
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        if (slashFiltered.length > 0) {
+          handleSlashPick(slashFiltered[slashIndex]);
+        }
+        return;
+      }
+      // 其他键（字母、退格等）继续编辑，面板保持打开
+      return;
+    }
+
+    if (e.key !== 'Enter') return;
     // Shift+Enter 永远插入换行
     if (e.shiftKey) return;
 
@@ -204,14 +289,23 @@ export default function InputBar({
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
+    const val = e.target.value;
+    setInput(val);
     const el = e.target;
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 180) + 'px';
+
+    // "/" 斜杠命令检测：仅在���首输入 "/" 时触发
+    if (val.startsWith('/') && !val.includes('\n')) {
+      setSlashOpen(true);
+    } else {
+      setSlashOpen(false);
+    }
   };
 
   const handleNewPrompt = () => {
     setInput('');
+    setSlashOpen(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.focus();
@@ -224,6 +318,13 @@ export default function InputBar({
   return (
     <div className="input-bar">
       <div className={`input-wrapper ${disabled ? 'is-disabled' : ''}`}>
+        {slashOpen && (
+          <SlashCommandPanel
+            filter={slashFilter}
+            activeIndex={slashIndex}
+            onPick={handleSlashPick}
+          />
+        )}
         <div className="input-toolbar">
           <div className="input-toolbar-left">
             <div className="input-role" ref={roleMenuRef}>
@@ -345,7 +446,7 @@ export default function InputBar({
           value={input}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
-          placeholder={disabled ? '助手正在分析中...' : '向 AI 提问，例如：分析最近的三路匹配异常情况'}
+          placeholder={disabled ? '助手正在分析中...' : '输入 / 浏览示例，或直接向 AI 提问...'}
           disabled={disabled}
           rows={1}
         />
@@ -360,11 +461,11 @@ export default function InputBar({
             >
               {sendShortcut === 'enter' ? (
                 <>
-                  <kbd>Enter</kbd> 发送 · <kbd>Shift+Enter</kbd> 换行
+                  <kbd>Enter</kbd> 发送 · <kbd>Shift+Enter</kbd> 换行 · <kbd>/</kbd> 示例
                 </>
               ) : (
                 <>
-                  <kbd>{MOD_LABEL}+Enter</kbd> 发送 · <kbd>Enter</kbd> 换行
+                  <kbd>{MOD_LABEL}+Enter</kbd> 发送 · <kbd>Enter</kbd> 换行 · <kbd>/</kbd> 示例
                 </>
               )}
               {softProtected && (

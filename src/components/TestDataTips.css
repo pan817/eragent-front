@@ -95,6 +95,82 @@
   background: rgba(255, 255, 255, 0.3);
 }
 
+/* ---- Dark mode overrides ---- */
+
+/* 1. Header: 降低饱和度和亮度，使用半透明渐变而非纯色 */
+[data-theme='dark'] .tips-header {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.25) 50%, rgba(168, 85, 247, 0.2) 100%);
+}
+
+[data-theme='dark'] .tips-header::after {
+  background: radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.06), transparent 50%);
+}
+
+[data-theme='dark'] .tips-header-icon {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme='dark'] .tips-close {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme='dark'] .tips-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* 2. Dialog 外框边框可见 */
+[data-theme='dark'] .tips-dialog {
+  border-color: var(--border-strong);
+}
+
+/* 3. Tabs 栏边框可见 */
+[data-theme='dark'] .tips-tabs {
+  border-bottom-color: var(--border-strong);
+}
+
+/* 4. Active tab 用亮色品牌色 */
+[data-theme='dark'] .tips-tab.is-active {
+  color: var(--brand-400);
+  border-bottom-color: var(--brand-400);
+}
+
+/* 5. 表格边框可见 */
+[data-theme='dark'] .tips-table-wrap {
+  border-color: var(--border-strong);
+}
+
+[data-theme='dark'] .tips-table th {
+  border-bottom-color: var(--border-strong);
+}
+
+[data-theme='dark'] .tips-table td {
+  border-bottom-color: var(--border-strong);
+}
+
+/* 6. KV 卡片边框可见 */
+[data-theme='dark'] .tips-kv-card {
+  border-color: var(--border-strong);
+}
+
+/* 7. ID chip 边框可见 */
+[data-theme='dark'] .tips-id-chip {
+  border-color: var(--border-strong);
+}
+
+/* 8. Anomaly 项文字在暗色下可读 */
+[data-theme='dark'] .tips-anomaly-item {
+  color: #fbbf24;
+}
+
+/* 9. Footer 边框 + kbd */
+[data-theme='dark'] .tips-footer {
+  border-top-color: var(--border-strong);
+}
+
+[data-theme='dark'] .tips-footer kbd {
+  border-color: var(--border-strong);
+}
+
 .tips-tabs {
   display: flex;
   gap: 4px;

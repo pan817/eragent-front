@@ -15,7 +15,12 @@
 }
 
 [data-theme='dark'] .sidebar {
-  background: var(--bg-subtle);
+  background: var(--bg-elevated);
+  border-right-color: var(--border-strong);
+}
+
+[data-theme='dark'] .sidebar-brand {
+  border-bottom-color: var(--border-strong);
 }
 
 /* ---------- Brand ---------- */
@@ -104,6 +109,10 @@
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   color: var(--text-subtle);
+}
+
+[data-theme='dark'] .sidebar-search {
+  border-color: var(--border-strong);
 }
 
 .sidebar-search input {
@@ -311,6 +320,10 @@
   padding: 12px;
 }
 
+[data-theme='dark'] .sidebar-stats {
+  border-color: var(--border-strong);
+}
+
 .sidebar-stats-title {
   font-size: 11px;
   font-weight: 600;
@@ -331,6 +344,10 @@
   border-radius: var(--r-sm);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
+}
+
+[data-theme='dark'] .sidebar-stat {
+  border-color: var(--border-strong);
 }
 
 .sidebar-stat-value {
@@ -361,6 +378,10 @@
   gap: 10px;
 }
 
+[data-theme='dark'] .sidebar-footer {
+  border-top-color: var(--border-strong);
+}
+
 .sidebar-footer-tools {
   display: flex;
   gap: 8px;
@@ -381,6 +402,10 @@
   color: var(--text);
 }
 
+[data-theme='dark'] .sidebar-footer-tools .icon-btn {
+  border-color: var(--border-strong);
+}
+
 .sidebar-footer-tools .header-action-btn {
   background: var(--bg-subtle);
   border-color: var(--border);
@@ -397,6 +422,10 @@
   color: var(--text);
 }
 
+[data-theme='dark'] .sidebar-footer-tools .header-action-btn {
+  border-color: var(--border-strong);
+}
+
 /* ---------- User card ---------- */
 .sidebar-user {
   display: flex;
@@ -406,6 +435,10 @@
   background: var(--bg-subtle);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
+}
+
+[data-theme='dark'] .sidebar-user {
+  border-color: var(--border-strong);
 }
 
 .sidebar-user-avatar {
@@ -464,6 +497,11 @@
   font-weight: 600;
   cursor: pointer;
   transition: all var(--dur-fast) var(--ease-out);
+}
+
+[data-theme='dark'] .sidebar-user-login {
+  background: var(--bg-subtle);
+  border-color: var(--border-strong);
 }
 
 .sidebar-user-login:hover {

@@ -125,7 +125,7 @@ export interface UseChatSessionsReturn {
   messages: ChatMessage[];
   loading: boolean;
   isGuestMode: boolean;
-  setMessages: (updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void;
+  setMessages: (updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]), targetSessionId?: string) => void;
   newChat: () => void;
   switchTo: (id: string) => void;
   deleteSession: (id: string) => void;
@@ -164,6 +164,8 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
   const [serverSearchResults, setServerSearchResults] = useState<ChatSession[] | null>(null);
 
   const prevUserIdRef = useRef<string | null>(userId);
+  const currentIdRef = useRef(currentId);
+  currentIdRef.current = currentId;
   const detailLoadedRef = useRef<Set<string>>(new Set());
   // 并发保护：同一个 temp id 多次调用 ensureRemoteSession 复用同一个 promise
   const pendingEnsureRef = useRef<Map<string, Promise<string>>>(new Map());
@@ -237,9 +239,10 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
   // ============================================
   // setMessages：纯本地，供乐观渲染使用
   // ============================================
-  const setMessages = useCallback<UseChatSessionsReturn['setMessages']>(updater => {
+  const setMessages = useCallback<UseChatSessionsReturn['setMessages']>((updater, targetSessionId?) => {
     setSessions(prev => {
-      const current = prev.find(s => s.id === currentId);
+      const cid = targetSessionId ?? currentIdRef.current;
+      const current = prev.find(s => s.id === cid);
       if (!current) return prev;
       const nextMessages =
         typeof updater === 'function' ? updater(current.messages) : updater;
@@ -254,11 +257,11 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
             : null,
         updatedAt: nowMs(),
       };
-      const next = prev.map(s => (s.id === currentId ? updated : s));
+      const next = prev.map(s => (s.id === cid ? updated : s));
       next.sort((a, b) => b.updatedAt - a.updatedAt);
       return next;
     });
-  }, [currentId]);
+  }, []);
 
   // ============================================
   // newChat
@@ -399,6 +402,8 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
           )
         );
         setCurrentId(prevId => (prevId === tempId ? real.id : prevId));
+        // 立即同步 ref，确保后续 setMessages 能找到正确的 session
+        currentIdRef.current = real.id;
         detailLoadedRef.current.add(real.id);
         return real.id;
       } finally {
@@ -449,17 +454,21 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
       setServerSearchResults(null);
       return;
     }
+    // stale 标记：effect 清理时置 true，丢弃已过期的响应
+    let stale = false;
     const handle = window.setTimeout(() => {
       apiSearchSessions(userId, q, { limit: 30 })
         .then(resp => {
+          if (stale) return;
           setServerSearchResults(resp.sessions.map(s => fromApiSession(s)));
         })
         .catch(err => {
-          console.error('[useChatSessions] search failed:', err);
-          setServerSearchResults([]);
+          if (stale) return;
+          console.error('[useChatSessions] search failed, falling back to local filter:', err);
+          setServerSearchResults(null);
         });
     }, 300);
-    return () => window.clearTimeout(handle);
+    return () => { stale = true; window.clearTimeout(handle); };
   }, [search, isGuestMode, userId]);
 
   const filteredSessions = useMemo(() => {

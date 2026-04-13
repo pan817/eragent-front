@@ -203,34 +203,63 @@
   box-shadow: none;
 }
 
-/* ---------- Success state ---------- */
-.feedback-success {
+/* ---------- Coming Soon state ---------- */
+.feedback-coming-soon {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 24px 16px 12px;
-  animation: feedbackSuccess var(--dur-base) var(--ease-spring);
+  gap: 10px;
+  padding: 28px 16px 18px;
+  animation: feedbackIn var(--dur-base) var(--ease-spring);
 }
 
-@keyframes feedbackSuccess {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-.feedback-success-icon {
-  width: 56px;
-  height: 56px;
+.feedback-coming-soon-icon {
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  background: var(--success-bg);
-  color: var(--success);
+  background: var(--brand-gradient-soft);
+  color: var(--brand-500);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.feedback-success-text {
-  font-size: 14px;
-  font-weight: 600;
+[data-theme='dark'] .feedback-coming-soon-icon {
+  background: var(--brand-500-18);
+  color: var(--brand-400);
+}
+
+.feedback-coming-soon-title {
+  font-size: 16px;
+  font-weight: 700;
   color: var(--text);
+  margin-top: 4px;
+}
+
+.feedback-coming-soon-text {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.feedback-coming-soon-btn {
+  margin-top: 8px;
+  padding: 8px 24px;
+  border: none;
+  border-radius: var(--r-md);
+  background: var(--brand-gradient);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+  box-shadow: 0 2px 8px var(--brand-500-30);
+}
+
+.feedback-coming-soon-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px var(--brand-500-45);
+}
+
+.feedback-coming-soon-btn:active {
+  transform: translateY(0) scale(0.98);
 }

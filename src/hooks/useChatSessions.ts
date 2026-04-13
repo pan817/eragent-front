@@ -31,10 +31,7 @@ const LOCAL_STORAGE_KEY = 'erp-agent-chat-sessions-v1';
 const MAX_SESSIONS = 50;
 const TITLE_MAX = 24;
 
-const genId = () =>
-  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+import { genId } from '../utils/id';
 
 const nowMs = () => Date.now();
 
@@ -125,6 +122,7 @@ export interface UseChatSessionsReturn {
   currentSession: ChatSession;
   messages: ChatMessage[];
   loading: boolean;
+  detailLoading: boolean;
   isGuestMode: boolean;
   setMessages: (updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]), targetSessionId?: string) => void;
   newChat: () => void;
@@ -163,11 +161,14 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
     return sessions[0]?.id ?? genId();
   });
   const [loading, setLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [search, setSearchState] = useState('');
   const [serverSearchResults, setServerSearchResults] = useState<ChatSession[] | null>(null);
 
   const currentIdRef = useRef(currentId);
   currentIdRef.current = currentId;
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
   const detailLoadedRef = useRef<Set<string>>(new Set());
   // 并发保护：同一个 temp id 多次调用 ensureRemoteSession 复用同一个 promise
   const pendingEnsureRef = useRef<Map<string, Promise<string>>>(new Map());
@@ -267,9 +268,7 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
             : null,
         updatedAt: nowMs(),
       };
-      const next = prev.map(s => (s.id === cid ? updated : s));
-      next.sort((a, b) => b.updatedAt - a.updatedAt);
-      return next;
+      return prev.map(s => (s.id === cid ? updated : s));
     });
   }, []);
 
@@ -312,12 +311,13 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
       if (isTempId(id)) return;
       if (detailLoadedRef.current.has(id)) return;
 
-      const target = sessions.find(s => s.id === id);
+      const target = sessionsRef.current.find(s => s.id === id);
       if (target && target.messages.length > 0) {
         detailLoadedRef.current.add(id);
         return;
       }
 
+      setDetailLoading(true);
       apiGetSession(userId, id)
         .then(resp => {
           const msgs = resp.messages.map(fromApiMessage).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
@@ -327,9 +327,10 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
         })
         .catch(err => {
           console.error('[useChatSessions] getSession failed:', err);
-        });
+        })
+        .finally(() => setDetailLoading(false));
     },
-    [sessions, isGuestMode, userId]
+    [isGuestMode, userId]
   );
 
   // ============================================
@@ -337,9 +338,14 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
   // ============================================
   const deleteSession = useCallback(
     (id: string) => {
+      // 快照用于回滚
+      let snapshot: ChatSession[] | null = null;
+      let prevCurrentId: string | null = null;
+
       // 乐观移除
       const tempPlaceholder = isGuestMode ? makeEmptySession() : makeEmptySession({ temp: true });
       setSessions(prev => {
+        snapshot = prev;
         const remaining = prev.filter(s => s.id !== id);
         if (remaining.length === 0) {
           return [tempPlaceholder];
@@ -347,9 +353,9 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
         return remaining;
       });
       setCurrentId(prev => {
+        prevCurrentId = prev;
         if (prev !== id) return prev;
-        // 自动切到第一条剩余
-        const remaining = sessions.filter(s => s.id !== id);
+        const remaining = sessionsRef.current.filter(s => s.id !== id);
         return remaining[0]?.id ?? tempPlaceholder.id;
       });
 
@@ -357,24 +363,33 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
       if (isTempId(id)) return;
 
       apiDeleteSession(userId, id).catch(err => {
-        console.error('[useChatSessions] deleteSession failed:', err);
+        console.error('[useChatSessions] deleteSession failed, rolling back:', err);
+        if (snapshot) setSessions(snapshot);
+        if (prevCurrentId) setCurrentId(prevCurrentId);
       });
     },
-    [sessions, isGuestMode, userId]
+    [isGuestMode, userId]
   );
 
   // ============================================
   // clearAll
   // ============================================
   const clearAll = useCallback(() => {
+    let snapshot: ChatSession[] | null = null;
+    let prevCurrentId: string | null = null;
+    const prevDetailLoaded = new Set(detailLoadedRef.current);
+
     const empty = isGuestMode ? makeEmptySession() : makeEmptySession({ temp: true });
-    setSessions([empty]);
-    setCurrentId(empty.id);
+    setSessions(prev => { snapshot = prev; return [empty]; });
+    setCurrentId(prev => { prevCurrentId = prev; return empty.id; });
     detailLoadedRef.current = new Set();
 
     if (isGuestMode || userId === null) return;
     apiClearAll(userId).catch(err => {
-      console.error('[useChatSessions] clearAll failed:', err);
+      console.error('[useChatSessions] clearAll failed, rolling back:', err);
+      if (snapshot) setSessions(snapshot);
+      if (prevCurrentId) setCurrentId(prevCurrentId);
+      detailLoadedRef.current = prevDetailLoaded;
     });
   }, [isGuestMode, userId]);
 
@@ -440,9 +455,7 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
         ...updated,
         messages: found.messages, // 保留前端已经渲染的乐观消息
       };
-      const next = prev.map(s => (s.id === updated.id ? merged : s));
-      next.sort((a, b) => b.updatedAt - a.updatedAt);
-      return next;
+      return prev.map(s => (s.id === updated.id ? merged : s));
     });
     detailLoadedRef.current.add(updated.id);
   }, []);
@@ -454,16 +467,26 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
     (id: string, newTitle: string) => {
       const trimmed = newTitle.trim();
       if (!trimmed) return;
-      // 乐观更新
+      // 快照旧标题用于回滚
+      let oldTitle: string | null = null;
       setSessions(prev =>
-        prev.map(s =>
-          s.id === id ? { ...s, title: trimmed, titleAuto: false } : s
-        )
+        prev.map(s => {
+          if (s.id === id) {
+            oldTitle = s.title;
+            return { ...s, title: trimmed, titleAuto: false };
+          }
+          return s;
+        })
       );
       if (isGuestMode || userId === null) return;
       if (isTempId(id)) return;
       apiUpdateSessionTitle(userId, id, trimmed).catch(err => {
-        console.error('[useChatSessions] renameSession failed:', err);
+        console.error('[useChatSessions] renameSession failed, rolling back:', err);
+        if (oldTitle !== null) {
+          setSessions(prev =>
+            prev.map(s => (s.id === id ? { ...s, title: oldTitle! } : s))
+          );
+        }
       });
     },
     [isGuestMode, userId]
@@ -503,20 +526,25 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
     return () => { stale = true; window.clearTimeout(handle); };
   }, [search, isGuestMode, userId]);
 
+  const sortedSessions = useMemo(
+    () => [...sessions].sort((a, b) => b.updatedAt - a.updatedAt),
+    [sessions]
+  );
+
   const filteredSessions = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return sessions;
+    if (!q) return sortedSessions;
 
     if (isGuestMode) {
-      return sessions.filter(s => {
+      return sortedSessions.filter(s => {
         if (s.title.toLowerCase().includes(q)) return true;
         return s.messages.some(m => m.content.toLowerCase().includes(q));
       });
     }
     // online：优先用 server 结果；未就绪前用本地 title 匹配作为占位
     if (serverSearchResults !== null) return serverSearchResults;
-    return sessions.filter(s => s.title.toLowerCase().includes(q));
-  }, [sessions, search, isGuestMode, serverSearchResults]);
+    return sortedSessions.filter(s => s.title.toLowerCase().includes(q));
+  }, [sortedSessions, search, isGuestMode, serverSearchResults]);
 
   return {
     sessions,
@@ -524,6 +552,7 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
     currentSession,
     messages: currentSession.messages,
     loading,
+    detailLoading,
     isGuestMode,
     setMessages,
     newChat,

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ChatWindow from './components/ChatWindow'
+import ErrorBoundary from './components/ErrorBoundary'
 import './App.css'
 
 const USER_ID_KEY = 'eragent_user_id'
@@ -32,11 +33,13 @@ function App() {
   }
 
   return (
-    <ChatWindow
-      userId={userId}
-      onLogin={handleLogin}
-      onLogout={handleLogout}
-    />
+    <ErrorBoundary>
+      <ChatWindow
+        userId={userId}
+        onLogin={handleLogin}
+        onLogout={handleLogout}
+      />
+    </ErrorBoundary>
   )
 }
 

@@ -75,13 +75,18 @@ const TOKEN_USAGE_RE =
 function extractModelUsage(
   attrs: Record<string, unknown>,
 ): { usage: ModelUsage | null; estimated: boolean } {
-  // 路径1: 结构化 attributes.usage（DAG 路由）
+  // 路径1a: 结构化 attributes.usage（DAG 路由）
   if (attrs.usage && typeof attrs.usage === 'object') {
     return { usage: attrs.usage as ModelUsage, estimated: false };
   }
 
-  // 路径2: 从 output.content 字符串中正则提取
+  // 路径1b: 结构化 attributes.output.usage（新版后端格式）
   const output = attrs.output as Record<string, unknown> | undefined;
+  if (output && typeof output === 'object' && output.usage && typeof output.usage === 'object') {
+    return { usage: output.usage as ModelUsage, estimated: false };
+  }
+
+  // 路径2: 从 output.content 字符串中正则提取
   if (output && typeof output === 'object' && typeof output.content === 'string') {
     const m = output.content.match(USAGE_META_RE);
     if (m) {
@@ -313,7 +318,7 @@ export default function TraceModal({
 
   useEffect(() => {
     const ids = sessionTraceIds.filter(Boolean);
-    if (ids.length < 2) {
+    if (ids.length < 1) {
       setTrendData([]);
       return;
     }
@@ -818,7 +823,7 @@ export default function TraceModal({
               )}
 
               {/* ---- Token 趋势图 ---- */}
-              {trendData.length >= 2 && (
+              {trendData.length >= 1 && (
                 <div className="token-trend-section">
                   <div className="token-section-title">Token 趋势（Session 内）</div>
                   {trendLoading ? (

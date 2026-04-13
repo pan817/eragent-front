@@ -200,7 +200,9 @@ export function fromApiMessage(m: ApiChatMessage): ChatMessage {
   return {
     id: m.id,
     role: m.role,
-    content: m.content,
+    content: (!m.content && m.role === 'assistant')
+      ? '该回复内容为空。'
+      : (m.content || ''),
     timestamp: new Date(m.created_at),
     status: m.status,
     durationMs: m.duration_ms ?? undefined,

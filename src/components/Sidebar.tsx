@@ -4,6 +4,8 @@ import type { ChatSession } from '../hooks/useChatSessions';
 import ThemeToggle from './ThemeToggle';
 import InitDataButton from './InitDataButton';
 import Avatar from './Avatar';
+import { formatMs } from '../utils/format';
+import { formatRelativeTimeFromTs } from '../utils/format';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -21,21 +23,10 @@ interface SidebarProps {
   onLoginClick: () => void;
   onLogout: () => void;
   onNewChat: () => void;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
-const formatRelativeTime = (ts: number): string => {
-  const diff = Date.now() - ts;
-  const sec = Math.floor(diff / 1000);
-  if (sec < 60) return '刚刚';
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}分钟前`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}小时前`;
-  const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}天前`;
-  const d = new Date(ts);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-};
 
 export default function Sidebar({
   userId,
@@ -52,8 +43,11 @@ export default function Sidebar({
   onLoginClick,
   onLogout,
   onNewChat,
+  collapsed,
+  onToggleCollapse,
 }: SidebarProps) {
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -94,15 +88,11 @@ export default function Sidebar({
     return { queryCount, totalMs, avgMs };
   }, [messages]);
 
-  const formatMs = (ms: number) => {
-    if (ms < 1000) return `${Math.round(ms)}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
-  };
 
   const hasAnySession = sessions.some(s => s.messageCount > 0);
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${collapsed ? 'is-collapsed' : ''}`}>
       <div className="sidebar-brand">
         <div className="sidebar-brand-logo">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -120,10 +110,27 @@ export default function Sidebar({
             />
           </svg>
         </div>
-        <div className="sidebar-brand-text">
-          <div className="sidebar-brand-name">ERP Agent</div>
-          <div className="sidebar-brand-sub">AI 采购分析助手</div>
-        </div>
+        {!collapsed && (
+          <div className="sidebar-brand-text">
+            <div className="sidebar-brand-name">ERP Agent</div>
+            <div className="sidebar-brand-sub">AI 采购分析助手</div>
+          </div>
+        )}
+        <button
+          type="button"
+          className="sidebar-collapse-btn"
+          onClick={onToggleCollapse}
+          aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
+          title={collapsed ? '展开侧边栏' : '收起侧边栏'}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {collapsed ? (
+              <polyline points="9 18 15 12 9 6" />
+            ) : (
+              <polyline points="15 18 9 12 15 6" />
+            )}
+          </svg>
+        </button>
       </div>
 
       <button type="button" className="sidebar-new-chat" onClick={onNewChat}>
@@ -131,7 +138,7 @@ export default function Sidebar({
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
-        <span>新建对话</span>
+        {!collapsed && <span>新建对话</span>}
       </button>
 
       <div className="sidebar-search">
@@ -173,7 +180,22 @@ export default function Sidebar({
           </button>
         )}
       </div>
-      <div className="sidebar-history">
+      <div
+        className="sidebar-history"
+        role="listbox"
+        aria-label="历史对话"
+        onKeyDown={e => {
+          if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+          e.preventDefault();
+          const items = Array.from((e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[role="option"]'));
+          if (items.length === 0) return;
+          const idx = items.findIndex(el => el === document.activeElement);
+          const next = e.key === 'ArrowDown'
+            ? (idx + 1) % items.length
+            : (idx - 1 + items.length) % items.length;
+          items[next].focus();
+        }}
+      >
         {filteredSessions.length === 0 ? (
           <div className="sidebar-history-empty">
             {search ? '未找到匹配对话' : '暂无历史对话'}
@@ -189,12 +211,18 @@ export default function Sidebar({
                 : Math.max(1, Math.ceil(s.messageCount / 2));
             const isEditing = editingId === s.id;
             return (
-              <button
+              <div
                 key={s.id}
-                type="button"
+                role="option"
+                tabIndex={0}
+                aria-selected={isActive}
                 className={`sidebar-history-item ${isActive ? 'is-active' : ''}`}
                 onClick={() => {
                   if (!isEditing) onSwitchSession(s.id);
+                }}
+                onKeyDown={e => {
+                  if (isEditing) return;
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSwitchSession(s.id); }
                 }}
                 onDoubleClick={e => {
                   e.stopPropagation();
@@ -225,7 +253,7 @@ export default function Sidebar({
                   )}
                   {!isEditing && (
                     <div className="sidebar-history-item-meta">
-                      <span>{formatRelativeTime(s.updatedAt)}</span>
+                      <span>{formatRelativeTimeFromTs(s.updatedAt)}</span>
                       {!isEmpty && <span>· {userMsgCount} 条</span>}
                     </div>
                   )}
@@ -252,7 +280,7 @@ export default function Sidebar({
                       className="sidebar-history-item-btn sidebar-history-item-delete"
                       onClick={e => {
                         e.stopPropagation();
-                        onDeleteSession(s.id);
+                        setConfirmingDeleteId(s.id);
                       }}
                       aria-label="删除对话"
                       title="删除对话"
@@ -265,7 +293,7 @@ export default function Sidebar({
                     </button>
                   </div>
                 )}
-              </button>
+              </div>
             );
           })
         )}
@@ -293,6 +321,26 @@ export default function Sidebar({
         <div className="sidebar-footer-tools">
           <ThemeToggle />
           <InitDataButton />
+          <div className="sidebar-shortcuts-wrap">
+            <button
+              type="button"
+              className="icon-btn sidebar-shortcuts-btn"
+              aria-label="快捷键"
+              title="快捷键"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M8 16h8" />
+              </svg>
+            </button>
+            <div className="sidebar-shortcuts-tooltip">
+              <div className="shortcuts-title">快捷键</div>
+              <div className="shortcuts-row"><kbd>⌘/Ctrl+K</kbd><span>聚焦输入框</span></div>
+              <div className="shortcuts-row"><kbd>/</kbd><span>浏览示例问题</span></div>
+              <div className="shortcuts-row"><kbd>Esc</kbd><span>关闭弹窗</span></div>
+              <div className="shortcuts-row"><kbd>双击会话</kbd><span>重命名</span></div>
+            </div>
+          </div>
         </div>
         <div className="sidebar-user">
           {userId ? (
@@ -303,6 +351,7 @@ export default function Sidebar({
                 type="button"
                 className="sidebar-user-action"
                 onClick={onLogout}
+                aria-label="退出登录"
                 title="退出登录"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -322,7 +371,7 @@ export default function Sidebar({
 
       {confirmingClear && (
         <div className="modal-overlay" onClick={() => setConfirmingClear(false)}>
-          <div className="confirm-dialog" onClick={e => e.stopPropagation()}>
+          <div className="confirm-dialog" role="alertdialog" aria-modal="true" onClick={e => e.stopPropagation()}>
             <div className="confirm-icon-wrap">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6" />
@@ -345,6 +394,37 @@ export default function Sidebar({
                 }}
               >
                 确认清空
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmingDeleteId && (
+        <div className="modal-overlay" onClick={() => setConfirmingDeleteId(null)}>
+          <div className="confirm-dialog" role="alertdialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+            <div className="confirm-icon-wrap">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+            </div>
+            <h3>删除这条对话？</h3>
+            <p>删除后不可恢复，确认继续吗？</p>
+            <div className="confirm-actions">
+              <button className="btn-cancel" onClick={() => setConfirmingDeleteId(null)}>
+                取消
+              </button>
+              <button
+                className="btn-danger"
+                onClick={() => {
+                  onDeleteSession(confirmingDeleteId);
+                  setConfirmingDeleteId(null);
+                }}
+              >
+                确认删除
               </button>
             </div>
           </div>

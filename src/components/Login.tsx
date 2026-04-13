@@ -1,4 +1,6 @@
-import { useState, useEffect, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import './Login.css';
 
 interface LoginProps {
   onLogin: (username: string) => void;
@@ -15,8 +17,9 @@ export default function Login({ onLogin, onCancel }: LoginProps) {
       return '';
     }
   });
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, true);
 
   // ESC 关闭
   useEffect(() => {
@@ -30,13 +33,8 @@ export default function Login({ onLogin, onCancel }: LoginProps) {
 
   const submitLogin = () => {
     const u = username.trim();
-    const p = password.trim();
     if (!u) {
       setError('请输入用户名');
-      return;
-    }
-    if (!p) {
-      setError('请输入密码');
       return;
     }
     setError('');
@@ -63,12 +61,12 @@ export default function Login({ onLogin, onCancel }: LoginProps) {
 
   return (
     <div
-      className="login-overlay"
+      className="modal-overlay login-overlay"
       onClick={e => {
         if (e.target === e.currentTarget && onCancel) onCancel();
       }}
     >
-      <div className="login-card" role="dialog" aria-modal="true">
+      <div className="login-card" role="dialog" aria-modal="true" ref={dialogRef}>
         {onCancel && (
           <button
             type="button"
@@ -97,7 +95,7 @@ export default function Login({ onLogin, onCancel }: LoginProps) {
             </svg>
           </div>
           <h1>登录</h1>
-          <p>请输入用户名，密码可任意填写</p>
+          <p>请输入用户名以开始使用</p>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit} noValidate>
@@ -109,19 +107,7 @@ export default function Login({ onLogin, onCancel }: LoginProps) {
               onChange={e => setUsername(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder="请输入用户名"
-              autoFocus={!username}
-            />
-          </label>
-
-          <label className="login-field">
-            <span>密码</span>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              onKeyDown={handleInputKeyDown}
-              placeholder="任意密码即可"
-              autoFocus={!!username}
+              autoFocus
             />
           </label>
 

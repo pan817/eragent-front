@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useChatSessions } from '../hooks/useChatSessions';
 import { useMessageSending } from '../hooks/useMessageSending';
 import MessageBubble from './MessageBubble';
 import InputBar, { type SendOptions } from './InputBar';
-import TraceModal from './TraceModal';
+const TraceModal = lazy(() => import('./TraceModal'));
 import Login from './Login';
 import Sidebar from './Sidebar';
 import FeedbackButton from './FeedbackButton';
@@ -11,6 +11,7 @@ import ExamplePromptsDrawer from './ExamplePromptsDrawer';
 import TestDataTipsModal from './TestDataTipsModal';
 import type { ExamplePrompt } from '../data/examplePrompts';
 import { SUGGESTIONS } from '../data/chatConstants';
+import './ChatWindow.css';
 
 const DEFAULT_SEND_OPTIONS: SendOptions = {
   role: 'general',
@@ -41,6 +42,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
     commitSessionFromAnalyze,
     renameSession,
     isGuestMode,
+    detailLoading,
   } = useChatSessions(userId);
 
   const [activeTraceId, setActiveTraceId] = useState<string | null>(null);
@@ -49,6 +51,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
   const [examplesOpen, setExamplesOpen] = useState(false);
   const [tipsOpen, setTipsOpen] = useState(false);
   const [draft, setDraft] = useState<{ text: string; nonce: number }>({ text: '', nonce: 0 });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
@@ -95,6 +98,15 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
     },
     [handleSend]
   );
+
+  const liveStatus = useMemo(() => {
+    if (loading) return '正在分析中...';
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== 'assistant') return '';
+    if (last.status === 'error') return '分析失败';
+    if (last.status === 'success') return '分析完成';
+    return '';
+  }, [loading, messages]);
 
   const lastDurationMs = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -168,11 +180,20 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
         onLoginClick={() => setShowLogin(true)}
         onLogout={onLogout}
         onNewChat={handleNewChat}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(v => !v)}
       />
 
       <main className="main-pane">
         <div className="chat-messages" ref={messagesContainerRef}>
-          {messages.length === 0 && (
+          {messages.length === 0 && detailLoading && (
+            <div className="session-loading">
+              <div className="spinner" />
+              <span>加载对话记录...</span>
+            </div>
+          )}
+
+          {messages.length === 0 && !detailLoading && (
             <div className="welcome">
               <div className="welcome-hero">
                 <div className="welcome-badge">AI · ERP Analytics</div>
@@ -218,6 +239,8 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
           <div ref={messagesEndRef} />
         </div>
 
+        <div className="sr-only" aria-live="polite" aria-atomic="true">{liveStatus}</div>
+
         {busyTip && (
           <div className="busy-tip">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -251,13 +274,15 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
       <TestDataTipsModal open={tipsOpen} onClose={() => setTipsOpen(false)} />
 
       {activeTraceId && (
-        <TraceModal
-          traceId={activeTraceId}
-          onClose={() => setActiveTraceId(null)}
-          sessionTraceIds={messages
-            .filter(m => m.role === 'assistant' && m.traceId)
-            .map(m => m.traceId!)}
-        />
+        <Suspense fallback={null}>
+          <TraceModal
+            traceId={activeTraceId}
+            onClose={() => setActiveTraceId(null)}
+            sessionTraceIds={messages
+              .filter(m => m.role === 'assistant' && m.traceId)
+              .map(m => m.traceId!)}
+          />
+        </Suspense>
       )}
 
       {showLogin && (

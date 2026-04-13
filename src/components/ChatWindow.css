@@ -1,0 +1,151 @@
+/* ============================================
+ * Welcome page + suggestion cards
+ * ============================================ */
+
+.welcome {
+  max-width: 760px;
+  margin: 20px auto;
+  padding: 20px;
+  animation: fadeInUp 0.5s var(--ease-out);
+}
+
+.welcome-hero {
+  text-align: center;
+  padding: 40px 24px 32px;
+}
+
+.welcome-badge {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: var(--r-full);
+  background: var(--brand-gradient-soft);
+  color: var(--brand-600);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 18px;
+  border: 1px solid var(--brand-100);
+}
+
+.welcome-hero h2 {
+  margin: 0 0 10px;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.welcome-hero p {
+  margin: 0 auto;
+  max-width: 540px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.suggestions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.suggestion-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  padding: 18px 18px 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  cursor: pointer;
+  transition: all var(--dur-base) var(--ease-out);
+  box-shadow: var(--shadow-xs);
+  opacity: 0;
+  animation: fadeInUp 0.5s var(--ease-out) forwards;
+}
+
+.suggestion-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
+  padding: 1px;
+  background: var(--brand-gradient);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out);
+  pointer-events: none;
+}
+
+.suggestion-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: transparent;
+}
+
+.suggestion-card:hover::before {
+  opacity: 1;
+}
+
+.suggestion-card:active {
+  transform: translateY(-1px) scale(0.99);
+}
+
+.suggestion-icon {
+  font-size: 22px;
+  margin-bottom: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-md);
+  background: var(--brand-gradient-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--brand-100);
+}
+
+.suggestion-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.suggestion-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.suggestion-arrow {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  color: var(--text-subtle);
+  font-size: 16px;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: all var(--dur-base) var(--ease-out);
+}
+
+.suggestion-card:hover .suggestion-arrow {
+  opacity: 1;
+  transform: translateX(0);
+  color: var(--brand-500);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

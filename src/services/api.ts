@@ -1,12 +1,11 @@
 import type { AnalyzeRequest, AnalyzeResponse, TraceResponse } from '../types/api';
 import { ApiError } from '../types/api';
-
-const API_BASE = import.meta.env.VITE_API_BASE || '';
+import { API_PREFIX } from './constants';
 
 export async function analyzeQuery(request: AnalyzeRequest): Promise<AnalyzeResponse> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/api/v1/analyze`, {
+    response = await fetch(`${API_PREFIX}/analyze`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
@@ -32,7 +31,7 @@ export interface InitDataResponse {
 export async function initData(): Promise<InitDataResponse> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/api/v1/init-data`, { method: 'POST' });
+    response = await fetch(`${API_PREFIX}/init-data`, { method: 'POST' });
   } catch {
     throw new ApiError(0, 'NETWORK_ERROR', '网络请求失败，请检查网络连接');
   }
@@ -47,7 +46,7 @@ export async function initData(): Promise<InitDataResponse> {
 export async function getTrace(traceId: string): Promise<TraceResponse> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/api/v1/traces/${traceId}`);
+    response = await fetch(`${API_PREFIX}/traces/${traceId}`);
   } catch {
     throw new ApiError(0, 'NETWORK_ERROR', '网络请求失败，请检查网络连接');
   }

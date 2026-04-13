@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './FeedbackButton.css';
 
 type FeedbackType = 'bug' | 'suggestion' | 'other';
@@ -18,10 +18,8 @@ const TYPES: { key: FeedbackType; label: string; icon: string }[] = [
   { key: 'other', label: '其他', icon: '💬' },
 ];
 
-const genId = () =>
-  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+import { genId } from '../utils/id';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 const saveFeedback = (entry: FeedbackEntry) => {
   try {
@@ -39,6 +37,8 @@ export default function FeedbackButton() {
   const [type, setType] = useState<FeedbackType>('suggestion');
   const [content, setContent] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open);
 
   useEffect(() => {
     if (!open) return;
@@ -97,6 +97,7 @@ export default function FeedbackButton() {
         <div className="modal-overlay" onClick={handleClose}>
           <div
             className="feedback-dialog"
+            ref={dialogRef}
             onClick={e => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
@@ -124,7 +125,7 @@ export default function FeedbackButton() {
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 </div>
-                <div className="feedback-success-text">已记录，感谢反馈 🙏</div>
+                <div className="feedback-success-text">已保存到本地，感谢反馈 🙏</div>
               </div>
             ) : (
               <>

@@ -10,8 +10,7 @@ import type {
   ApiSessionListResponse,
 } from '../types/api';
 import { ApiError } from '../types/api';
-
-const API_BASE = import.meta.env.VITE_API_BASE || '';
+import { API_PREFIX } from './constants';
 
 interface FetchOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
@@ -37,7 +36,7 @@ async function apiFetch<T>(path: string, opts: FetchOptions): Promise<T> {
   }
 
   const queryStr = params.toString();
-  const url = `${API_BASE}${path}${queryStr ? `?${queryStr}` : ''}`;
+  const url = `${path}${queryStr ? `?${queryStr}` : ''}`;
 
   const headers: Record<string, string> = {
     'X-User-Id': opts.userId,
@@ -95,7 +94,7 @@ export function listSessions(
   userId: string,
   opts: { limit?: number; cursor?: string } = {}
 ): Promise<ApiSessionListResponse> {
-  return apiFetch<ApiSessionListResponse>('/api/v1/sessions', {
+  return apiFetch<ApiSessionListResponse>(`${API_PREFIX}/sessions`, {
     method: 'GET',
     userId,
     query: { limit: opts.limit, cursor: opts.cursor },
@@ -110,7 +109,7 @@ export function createSession(
   userId: string,
   opts: { title?: string; idempotencyKey?: string } = {}
 ): Promise<ApiCreateSessionResponse> {
-  return apiFetch<ApiCreateSessionResponse>('/api/v1/sessions', {
+  return apiFetch<ApiCreateSessionResponse>(`${API_PREFIX}/sessions`, {
     method: 'POST',
     userId,
     body: opts.title !== undefined ? { title: opts.title } : {},
@@ -127,7 +126,7 @@ export function getSession(
   sessionId: string,
   opts: { messageLimit?: number } = {}
 ): Promise<ApiSessionDetailResponse> {
-  return apiFetch<ApiSessionDetailResponse>(`/api/v1/sessions/${sessionId}`, {
+  return apiFetch<ApiSessionDetailResponse>(`${API_PREFIX}/sessions/${sessionId}`, {
     method: 'GET',
     userId,
     query: { message_limit: opts.messageLimit },
@@ -143,7 +142,7 @@ export function updateSessionTitle(
   sessionId: string,
   title: string | null
 ): Promise<{ session: ApiChatSession }> {
-  return apiFetch<{ session: ApiChatSession }>(`/api/v1/sessions/${sessionId}`, {
+  return apiFetch<{ session: ApiChatSession }>(`${API_PREFIX}/sessions/${sessionId}`, {
     method: 'PATCH',
     userId,
     body: { title },
@@ -155,7 +154,7 @@ export function updateSessionTitle(
 // ============================================
 
 export function deleteSession(userId: string, sessionId: string): Promise<void> {
-  return apiFetch<void>(`/api/v1/sessions/${sessionId}`, {
+  return apiFetch<void>(`${API_PREFIX}/sessions/${sessionId}`, {
     method: 'DELETE',
     userId,
   });
@@ -166,7 +165,7 @@ export function deleteSession(userId: string, sessionId: string): Promise<void> 
 // ============================================
 
 export function clearAllSessions(userId: string): Promise<ApiClearAllResponse> {
-  return apiFetch<ApiClearAllResponse>('/api/v1/sessions', {
+  return apiFetch<ApiClearAllResponse>(`${API_PREFIX}/sessions`, {
     method: 'DELETE',
     userId,
     query: { confirm: 'DELETE_ALL' },
@@ -194,7 +193,7 @@ export function appendMessages(
   idempotencyKey?: string
 ): Promise<ApiAppendMessagesResponse> {
   return apiFetch<ApiAppendMessagesResponse>(
-    `/api/v1/sessions/${sessionId}/messages`,
+    `${API_PREFIX}/sessions/${sessionId}/messages`,
     {
       method: 'POST',
       userId,
@@ -223,7 +222,7 @@ export function updateMessage(
   patch: UpdateMessagePayload
 ): Promise<{ message: ApiChatMessage }> {
   return apiFetch<{ message: ApiChatMessage }>(
-    `/api/v1/sessions/${sessionId}/messages/${messageId}`,
+    `${API_PREFIX}/sessions/${sessionId}/messages/${messageId}`,
     {
       method: 'PATCH',
       userId,
@@ -241,7 +240,7 @@ export function searchSessions(
   q: string,
   opts: { limit?: number; scope?: 'title' | 'content' | 'all' } = {}
 ): Promise<ApiSearchResponse> {
-  return apiFetch<ApiSearchResponse>('/api/v1/sessions/search', {
+  return apiFetch<ApiSearchResponse>(`${API_PREFIX}/sessions/search`, {
     method: 'GET',
     userId,
     query: { q, limit: opts.limit, scope: opts.scope },

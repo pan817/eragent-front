@@ -7,7 +7,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const backendHost = env.VITE_BACKEND_HOST || 'localhost'
-  const backendPort = env.VITE_BACKEND_PORT || '8000'
+  const backendPort = env.VITE_BACKEND_PORT || '8080'
   const backendTarget = `http://${backendHost}:${backendPort}`
 
   return {

@@ -112,7 +112,7 @@
 }
 
 [data-theme='dark'] .slash-panel-item-badge {
-  background: rgba(99, 102, 241, 0.2);
+  background: var(--brand-500-20);
   color: var(--brand-200);
 }
 

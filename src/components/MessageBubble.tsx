@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import './MessageBubble.css';
 import type { ChatMessage } from '../types/api';
 import MarkdownContent from './MarkdownContent';
 import Avatar from './Avatar';
+import { formatRelativeTime } from '../utils/format';
 
 interface Props {
   message: ChatMessage;
@@ -19,15 +21,6 @@ const LOADING_STAGES = [
 
 /** 每条 loading 阶段文字的展示时长（ms） */
 const LOADING_STAGE_INTERVAL = 1800;
-
-function formatRelativeTime(date: Date): string {
-  const diff = (Date.now() - date.getTime()) / 1000;
-  if (diff < 10) return '刚刚';
-  if (diff < 60) return `${Math.floor(diff)} 秒前`;
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
-  return date.toLocaleDateString();
-}
 
 function LoadingStages() {
   const [stageIdx, setStageIdx] = useState(0);

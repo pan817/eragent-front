@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import {
   CATEGORIES,
   EXAMPLE_PROMPTS,
@@ -38,6 +39,8 @@ export default function ExamplePromptsDrawer({ open, onClose, onPick }: Props) {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [chipsExpanded, setChipsExpanded] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(drawerRef, open);
 
   // 打开时聚焦搜索框，关闭时清空
   useEffect(() => {
@@ -102,9 +105,10 @@ export default function ExamplePromptsDrawer({ open, onClose, onPick }: Props) {
 
   return (
     <>
-      <div className="examples-backdrop" onClick={onClose} />
+      <div className="modal-overlay examples-backdrop" onClick={onClose} />
       <aside
         className="examples-drawer"
+        ref={drawerRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="examples-drawer-title"

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import SlashCommandPanel, { getFilteredPrompts } from './SlashCommandPanel';
 import type { ExamplePrompt } from '../data/examplePrompts';
+import { formatMs } from '../utils/format';
 import './InputBar.css';
 
 export type AnalystRole = 'general' | 'procurement' | 'finance' | 'supply';
@@ -105,11 +106,6 @@ const loadShortcut = (): SendShortcut => {
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform);
 const MOD_LABEL = isMac ? '⌘' : 'Ctrl';
 
-const formatMs = (ms: number): string => {
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-};
-
 export default function InputBar({
   onSend,
   disabled,
@@ -128,6 +124,9 @@ export default function InputBar({
   const [timeMenuOpen, setTimeMenuOpen] = useState(false);
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
+  const [roleIdx, setRoleIdx] = useState(-1);
+  const [outputIdx, setOutputIdx] = useState(-1);
+  const [timeIdx, setTimeIdx] = useState(-1);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const roleMenuRef = useRef<HTMLDivElement>(null);
   const outputMenuRef = useRef<HTMLDivElement>(null);
@@ -370,7 +369,14 @@ export default function InputBar({
               <button
                 type="button"
                 className="input-role-trigger"
-                onClick={() => setRoleMenuOpen(v => !v)}
+                onClick={() => { setRoleMenuOpen(v => !v); setRoleIdx(ROLES.findIndex(r => r.key === options.role)); }}
+                onKeyDown={e => {
+                  if (!roleMenuOpen) return;
+                  if (e.key === 'ArrowDown') { e.preventDefault(); setRoleIdx(i => (i + 1) % ROLES.length); }
+                  else if (e.key === 'ArrowUp') { e.preventDefault(); setRoleIdx(i => (i - 1 + ROLES.length) % ROLES.length); }
+                  else if (e.key === 'Enter' && roleIdx >= 0) { e.preventDefault(); setOptions(o => ({ ...o, role: ROLES[roleIdx].key })); setRoleMenuOpen(false); }
+                  else if (e.key === 'Escape') { e.preventDefault(); setRoleMenuOpen(false); }
+                }}
                 aria-haspopup="listbox"
                 aria-expanded={roleMenuOpen}
               >
@@ -388,7 +394,7 @@ export default function InputBar({
                       type="button"
                       role="option"
                       aria-selected={r.key === options.role}
-                      className={`input-role-item ${r.key === options.role ? 'is-active' : ''}`}
+                      className={`input-role-item ${r.key === options.role ? 'is-active' : ''} ${roleIdx === ROLES.indexOf(r) ? 'is-focused' : ''}`}
                       onClick={() => {
                         setOptions(o => ({ ...o, role: r.key }));
                         setRoleMenuOpen(false);
@@ -414,7 +420,15 @@ export default function InputBar({
               <button
                 type="button"
                 className="input-role-trigger"
-                onClick={() => setOutputMenuOpen(v => !v)}
+                onClick={() => { setOutputMenuOpen(v => !v); setOutputIdx(OUTPUT_MODES.findIndex(m => m.key === options.outputMode)); }}
+                onKeyDown={e => {
+                  if (!outputMenuOpen) return;
+                  if (e.key === 'ArrowDown') { e.preventDefault(); setOutputIdx(i => (i + 1) % OUTPUT_MODES.length); }
+                  else if (e.key === 'ArrowUp') { e.preventDefault(); setOutputIdx(i => (i - 1 + OUTPUT_MODES.length) % OUTPUT_MODES.length); }
+                  else if (e.key === 'Enter' && outputIdx >= 0) { e.preventDefault(); setOptions(o => ({ ...o, outputMode: OUTPUT_MODES[outputIdx].key })); setOutputMenuOpen(false); }
+                  else if (e.key === 'Escape') { e.preventDefault(); setOutputMenuOpen(false); }
+                }}
+                aria-haspopup="listbox"
                 aria-expanded={outputMenuOpen}
                 title="选择输出格式"
               >
@@ -434,7 +448,7 @@ export default function InputBar({
                       type="button"
                       role="option"
                       aria-selected={m.key === options.outputMode}
-                      className={`input-role-item ${m.key === options.outputMode ? 'is-active' : ''}`}
+                      className={`input-role-item ${m.key === options.outputMode ? 'is-active' : ''} ${outputIdx === OUTPUT_MODES.indexOf(m) ? 'is-focused' : ''}`}
                       onClick={() => {
                         setOptions(o => ({ ...o, outputMode: m.key }));
                         setOutputMenuOpen(false);
@@ -459,7 +473,15 @@ export default function InputBar({
               <button
                 type="button"
                 className="input-role-trigger"
-                onClick={() => setTimeMenuOpen(v => !v)}
+                onClick={() => { setTimeMenuOpen(v => !v); setTimeIdx(TIME_RANGES.findIndex(t => t.key === options.timeRange)); }}
+                onKeyDown={e => {
+                  if (!timeMenuOpen) return;
+                  if (e.key === 'ArrowDown') { e.preventDefault(); setTimeIdx(i => (i + 1) % TIME_RANGES.length); }
+                  else if (e.key === 'ArrowUp') { e.preventDefault(); setTimeIdx(i => (i - 1 + TIME_RANGES.length) % TIME_RANGES.length); }
+                  else if (e.key === 'Enter' && timeIdx >= 0) { e.preventDefault(); setOptions(o => ({ ...o, timeRange: TIME_RANGES[timeIdx].key })); setTimeMenuOpen(false); }
+                  else if (e.key === 'Escape') { e.preventDefault(); setTimeMenuOpen(false); }
+                }}
+                aria-haspopup="listbox"
                 aria-expanded={timeMenuOpen}
                 title="选择时间范围"
               >
@@ -477,7 +499,7 @@ export default function InputBar({
                       type="button"
                       role="option"
                       aria-selected={t.key === options.timeRange}
-                      className={`input-role-item ${t.key === options.timeRange ? 'is-active' : ''}`}
+                      className={`input-role-item ${t.key === options.timeRange ? 'is-active' : ''} ${timeIdx === TIME_RANGES.indexOf(t) ? 'is-focused' : ''}`}
                       onClick={() => {
                         setOptions(o => ({ ...o, timeRange: t.key }));
                         setTimeMenuOpen(false);

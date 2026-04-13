@@ -3,21 +3,8 @@
  * ============================================ */
 
 .examples-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.4);
-  z-index: 45;
-  animation: examplesFadeIn var(--dur-fast) var(--ease-out);
-  backdrop-filter: blur(2px);
-}
-
-[data-theme='dark'] .examples-backdrop {
-  background: rgba(0, 0, 0, 0.55);
-}
-
-@keyframes examplesFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  z-index: 999;
+  display: block;
 }
 
 .examples-drawer {
@@ -28,7 +15,7 @@
   width: min(460px, 100vw);
   background: var(--bg-elevated);
   box-shadow: -10px 0 40px rgba(15, 23, 42, 0.18);
-  z-index: 46;
+  z-index: 1000;
   display: flex;
   flex-direction: column;
   animation: examplesSlideIn var(--dur-base) var(--ease-out);
@@ -85,9 +72,9 @@
 }
 
 [data-theme='dark'] .examples-header-badge {
-  background: rgba(99, 102, 241, 0.18);
+  background: var(--brand-500-18);
   color: var(--brand-400);
-  border-color: rgba(99, 102, 241, 0.35);
+  border-color: var(--brand-500-35);
 }
 
 .examples-close {
@@ -221,8 +208,8 @@
 }
 
 [data-theme='dark'] .examples-chip.is-active {
-  background: rgba(99, 102, 241, 0.2);
-  border-color: rgba(99, 102, 241, 0.5);
+  background: var(--brand-500-20);
+  border-color: var(--brand-500-50);
   color: var(--brand-400);
 }
 
@@ -309,7 +296,7 @@
 }
 
 [data-theme='dark'] .examples-item:hover {
-  background: rgba(99, 102, 241, 0.12);
+  background: var(--brand-500-12);
 }
 
 .examples-item-main {
@@ -382,7 +369,7 @@
 }
 
 [data-theme='dark'] .examples-item mark {
-  background: rgba(99, 102, 241, 0.35);
+  background: var(--brand-500-35);
   color: var(--brand-400);
 }
 
@@ -426,7 +413,7 @@
 
 [data-theme='dark'] .examples-more-link:hover {
   color: var(--brand-400);
-  background: rgba(99, 102, 241, 0.12);
+  background: var(--brand-500-12);
 }
 
 .input-examples-btn {
@@ -453,8 +440,8 @@
 
 [data-theme='dark'] .input-examples-btn:hover {
   color: var(--brand-400);
-  background: rgba(99, 102, 241, 0.12);
-  border-color: rgba(99, 102, 241, 0.4);
+  background: var(--brand-500-12);
+  border-color: var(--brand-500-40);
 }
 
 /* ---------- Responsive ---------- */

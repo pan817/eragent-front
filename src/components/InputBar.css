@@ -111,8 +111,13 @@
 }
 
 [data-theme='dark'] .input-role-item.is-active {
-  background: rgba(99, 102, 241, 0.18);
+  background: var(--brand-500-18);
   color: var(--brand-400);
+}
+
+.input-role-item.is-focused {
+  outline: 2px solid var(--brand-500);
+  outline-offset: -2px;
 }
 
 .input-role-item-icon {
@@ -250,8 +255,8 @@
 
 [data-theme='dark'] .input-new-prompt:hover:not(:disabled) {
   color: var(--brand-400);
-  background: rgba(99, 102, 241, 0.15);
-  border-color: rgba(99, 102, 241, 0.35);
+  background: var(--brand-500-15);
+  border-color: var(--brand-500-35);
 }
 
 .input-new-prompt:disabled {

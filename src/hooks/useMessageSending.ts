@@ -3,11 +3,7 @@ import type { ChatMessage, ApiChatSession } from '../types/api';
 import { analyzeQuery } from '../services/api';
 import type { SendOptions } from '../components/InputBar';
 
-/** 生成唯一 ID（优先 crypto.randomUUID，降级到时间戳+随机数） */
-const genId = () =>
-  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+import { genId } from '../utils/id';
 
 const DEFAULT_SEND_OPTIONS: SendOptions = {
   role: 'general',

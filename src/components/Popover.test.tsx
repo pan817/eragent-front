@@ -85,4 +85,21 @@ describe('Popover', () => {
     // bottom-end 应设置 right 而非 left
     expect(host.style.right).not.toBe('')
   })
+
+  it('renders but stays hidden when anchorRef.current is null', () => {
+    function NullAnchorHarness() {
+      const anchorRef = useRef<HTMLElement>(null)
+      return (
+        <Popover open anchorRef={anchorRef} onClose={() => {}}>
+          <div data-testid="popover-body">content</div>
+        </Popover>
+      )
+    }
+    render(<NullAnchorHarness />)
+    const body = screen.getByTestId('popover-body')
+    expect(body).toBeInTheDocument()
+    const host = body.parentElement as HTMLElement
+    // 初始 style 是 visibility: hidden + top/left = -9999；无 anchor 时 compute 跳过，不会变
+    expect(host.style.visibility).toBe('hidden')
+  })
 })

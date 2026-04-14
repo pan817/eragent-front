@@ -63,7 +63,15 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
     setShowLogin(true);
   }, []);
 
-  const { loading, handleSend, handleRegenerate, busyTip, busySessions } = useMessageSending({
+  const {
+    loading,
+    handleSend,
+    handleRegenerate,
+    busyTip,
+    busySessions,
+    stopSessionStreams,
+    stopAllStreams,
+  } = useMessageSending({
     userId,
     sessionId: currentId,
     messages,
@@ -73,6 +81,21 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
     commitSessionFromAnalyze,
     onNeedLogin,
   });
+
+  // 删会话 / 清空前必须先停掉对应的异步分析流，否则 EventSource + 降级轮询会在后台空转，
+  // 表现为 Network 面板里 /events 请求不停
+  const handleDeleteSession = useCallback(
+    (id: string) => {
+      stopSessionStreams(id);
+      deleteSession(id);
+    },
+    [stopSessionStreams, deleteSession]
+  );
+
+  const handleClearAll = useCallback(() => {
+    stopAllStreams();
+    clearAll();
+  }, [stopAllStreams, clearAll]);
 
   // 智能滚动：只有用户已在底部时才自动滚动
   useEffect(() => {
@@ -199,9 +222,9 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
         search={search}
         onSearchChange={setSearch}
         onSwitchSession={handleSwitchSession}
-        onDeleteSession={deleteSession}
+        onDeleteSession={handleDeleteSession}
         onRenameSession={renameSession}
-        onClearAll={clearAll}
+        onClearAll={handleClearAll}
         onLoginClick={() => setShowLogin(true)}
         onLogout={onLogout}
         onNewChat={handleNewChat}

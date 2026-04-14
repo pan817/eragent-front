@@ -13,6 +13,8 @@ export interface UseAnalysisStreamsReturn {
   stop: (traceId: string) => void;
   stopAll: () => void;
   isActive: (traceId: string) => boolean;
+  /** 当前活跃 trace_id 列表，供调用方做"不在此列表则停"的集合清理 */
+  activeIds: () => string[];
 }
 
 export function useAnalysisStreams(): UseAnalysisStreamsReturn {
@@ -59,5 +61,7 @@ export function useAnalysisStreams(): UseAnalysisStreamsReturn {
 
   const isActive = useCallback((traceId: string) => activeRef.current.has(traceId), []);
 
-  return { start, stop, stopAll, isActive };
+  const activeIds = useCallback(() => Array.from(activeRef.current.keys()), []);
+
+  return { start, stop, stopAll, isActive, activeIds };
 }

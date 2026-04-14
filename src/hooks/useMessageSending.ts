@@ -55,6 +55,10 @@ export interface UseMessageSendingReturn {
   busyTip: boolean;
   /** 有正在跑任务的 sessionId 集合（含当前 session），供 Sidebar 显示 spinner */
   busySessions: Set<string>;
+  /** 删除会话前调用，停止该 session 所有异步分析流（SSE + 降级轮询），避免 EventSource 空转 */
+  stopSessionStreams: (sessionId: string) => void;
+  /** 清空所有会话时调用，停止全部流 */
+  stopAllStreams: () => void;
 }
 
 export function useMessageSending({
@@ -122,6 +126,37 @@ export function useMessageSending({
 
   // ---- 异步流管理（仅 USE_ASYNC_ANALYZE=true 时会真正用到） ----
   const streams = useAnalysisStreams();
+
+  // traceId → sessionId 映射。start 时记录、done/error 时删除；
+  // deleteSession/clearAll 时根据此 map 定位并 stop 对应流，
+  // 不依赖"非当前会话的 messages 未加载"这个边界。
+  const streamToSessionRef = useRef(new Map<string, string>());
+
+  const registerStream = useCallback((traceId: string, sid: string) => {
+    streamToSessionRef.current.set(traceId, sid);
+  }, []);
+
+  const unregisterStream = useCallback((traceId: string) => {
+    streamToSessionRef.current.delete(traceId);
+  }, []);
+
+  const stopSessionStreams = useCallback(
+    (sid: string) => {
+      const map = streamToSessionRef.current;
+      for (const [traceId, s] of map) {
+        if (s === sid) {
+          streams.stop(traceId);
+          map.delete(traceId);
+        }
+      }
+    },
+    [streams]
+  );
+
+  const stopAllStreams = useCallback(() => {
+    streams.stopAll();
+    streamToSessionRef.current.clear();
+  }, [streams]);
 
   // 给 onDone/onError toast 加 session 上下文：如果任务完成时用户已切到别的 session，
   // toast 要告诉他"其他会话"，避免他在当前 session 看到莫名其妙的失败提示。
@@ -238,6 +273,7 @@ export function useMessageSending({
         );
       },
       onDone: snap => {
+        unregisterStream(snap.trace_id);
         applySnapshotToMessage(assistantMsgId, sid, snap);
         stopLoading(sid);
       },
@@ -252,26 +288,27 @@ export function useMessageSending({
         notifyForSession(sid, shown, level);
         setMessages(
           prev =>
-            prev.map(m =>
-              m.id === assistantMsgId
-                ? {
-                    ...m,
-                    content: shown,
-                    status: 'error' as const,
-                    stageText: undefined,
-                    timeline: undefined,
-                    degradedToPolling: undefined,
-                    resumedAt: undefined,
-                    errorCode: err instanceof ApiError ? err.code : undefined,
-                  }
-                : m
-            ),
+            prev.map(m => {
+              if (m.id !== assistantMsgId) return m;
+              // onError 没有 traceId 参数，只能从消息里取
+              if (m.traceId) unregisterStream(m.traceId);
+              return {
+                ...m,
+                content: shown,
+                status: 'error' as const,
+                stageText: undefined,
+                timeline: undefined,
+                degradedToPolling: undefined,
+                resumedAt: undefined,
+                errorCode: err instanceof ApiError ? err.code : undefined,
+              };
+            }),
           sid
         );
         stopLoading(sid);
       },
     }),
-    [setMessages, applySnapshotToMessage, stopLoading]
+    [setMessages, applySnapshotToMessage, stopLoading, notifyForSession, unregisterStream]
   );
 
   // ---- 刷新/切会话后恢复订阅：对 status='sending' 且有 traceId 的消息重连 ----
@@ -290,9 +327,10 @@ export function useMessageSending({
           prev.map(msg => (msg.id === m.id ? { ...msg, resumedAt } : msg)),
         sessionId
       );
+      registerStream(m.traceId, sessionId);
       streams.start(m.traceId, buildStreamHandlers(m.id, sessionId));
     }
-  }, [messages, sessionId, streams, buildStreamHandlers, startLoading, setMessages]);
+  }, [messages, sessionId, streams, buildStreamHandlers, startLoading, setMessages, registerStream]);
 
   // ---- handleSend ----
   const handleSend = useCallback(async (query: string, options: SendOptions = DEFAULT_SEND_OPTIONS) => {
@@ -386,6 +424,7 @@ export function useMessageSending({
           sendSessionId
         );
         // 流的 onDone / onError 负责最终状态 + stopLoading
+        registerStream(ack.trace_id, sendSessionId);
         streams.start(ack.trace_id, buildStreamHandlers(realAssistantId, sendSessionId));
       } catch (err) {
         const errorMsg = reportSendError(err, '请求失败，请检查网络连接');
@@ -444,7 +483,7 @@ export function useMessageSending({
     } finally {
       stopLoading(sendSessionId);
     }
-  }, [loading, showBusyTip, userId, sessionId, startLoading, stopLoading, setMessages, ensureRemoteSession, commitSessionFromAnalyze, isGuestMode, onNeedLogin, streams, buildStreamHandlers]);
+  }, [loading, showBusyTip, userId, sessionId, startLoading, stopLoading, setMessages, ensureRemoteSession, commitSessionFromAnalyze, isGuestMode, onNeedLogin, streams, buildStreamHandlers, registerStream]);
 
   // ---- handleRegenerate ----
   const handleRegenerate = useCallback(
@@ -517,6 +556,7 @@ export function useMessageSending({
                 ),
               regenSessionId
             );
+            registerStream(ack.trace_id, regenSessionId);
             streams.start(
               ack.trace_id,
               buildStreamHandlers(realAssistantId, regenSessionId)
@@ -578,8 +618,17 @@ export function useMessageSending({
       })();
     },
     // messages 通过 messagesRef 读，不进 deps —— 避免 SSE 事件打穿 MessageBubble 的 memo
-    [loading, showBusyTip, sessionId, startLoading, stopLoading, setMessages, userId, ensureRemoteSession, commitSessionFromAnalyze, isGuestMode, streams, buildStreamHandlers]
+    [loading, showBusyTip, sessionId, startLoading, stopLoading, setMessages, userId, ensureRemoteSession, commitSessionFromAnalyze, isGuestMode, streams, buildStreamHandlers, registerStream]
   );
 
-  return { loading, handleSend, handleRegenerate, showBusyTip, busyTip, busySessions };
+  return {
+    loading,
+    handleSend,
+    handleRegenerate,
+    showBusyTip,
+    busyTip,
+    busySessions,
+    stopSessionStreams,
+    stopAllStreams,
+  };
 }

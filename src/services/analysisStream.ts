@@ -253,8 +253,15 @@ export function runAnalysisTask(
   listen('done');
 
   es.onopen = () => {
+    // 注意：这里只在"首次建连"时重置 lastEventAt。
+    // 后端/网关经常在数十秒后主动关闭 SSE，EventSource 会自动重连并再次 onopen；
+    // 如果每次都刷 lastEventAt，watchdog 的 30s 窗口会被无限滑动，永远不触发降级。
+    // 叠加后端只推 heartbeat 不推业务事件的 bug（见 docs/async_analyze_backend_issue.md），
+    // 就会出现"events 请求一直重连、前端永远分析中"的死循环。
+    if (!connected) {
+      lastEventAt = Date.now();
+    }
     connected = true;
-    lastEventAt = Date.now();
   };
 
   es.onerror = () => {

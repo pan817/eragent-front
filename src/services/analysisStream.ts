@@ -67,6 +67,12 @@ export interface AnalysisStreamHandlers {
   onStage: (text: string) => void;
   /** 时间线追加一条（折叠面板内时序展示） */
   onTimelineAppend: (entry: AnalysisTimelineEntry) => void;
+  /**
+   * 就地更新一条已入列的时间线条目：按 matchKey 找最近一条尚未完成（durationMs 缺失）的项，
+   * 回填 patch 指定字段。找不到时调用方可选择 append 兜底，不强制。
+   * 用于 tool/dag_task 的 start 先入"进行中"，end 到达后变成"完成 + 耗时"。
+   */
+  onTimelineUpdate: (matchKey: string, patch: { text: string; durationMs: number }) => void;
   /** 终态；snapshot.status 为 ok/error/aborted，result 与 error 二选一 */
   onDone: (snapshot: TaskSnapshot) => void;
   /** 流程里任何异常（建连失败未能降级、轮询超时、快照拉取失败等）。触发后不再 onDone */
@@ -90,6 +96,9 @@ export function runAnalysisTask(
   // 失败熔断计数器：SSE onerror（已建连态）与轮询失败共用一套计数
   let consecutiveFailures = 0;
   let totalFailures = 0;
+  // 整个任务周期共用一个 AbortController；cleanup 时 abort，所有在途 fetch 立刻取消，
+  // 避免 cleanup 后仍有请求在飞、切会话/刷新时浪费带宽 + 触发熔断计数
+  const ac = new AbortController();
 
   const globalStartedAt = Date.now();
 
@@ -98,7 +107,11 @@ export function runAnalysisTask(
     if (es) { es.close(); es = null; }
     if (watchdog) { clearInterval(watchdog); watchdog = null; }
     if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    ac.abort();
   };
+
+  const isAbortError = (err: unknown) =>
+    err instanceof ApiError && err.code === ApiErrorCode.ABORTED;
 
   const finishOk = (snapshot: TaskSnapshot) => {
     if (stopped) return;
@@ -166,7 +179,7 @@ export function runAnalysisTask(
       return;
     }
     try {
-      const snap = await fetchTaskSnapshot(traceId);
+      const snap = await fetchTaskSnapshot(traceId, { signal: ac.signal });
       if (stopped) return;
       // 响应成功就算连续失败清零（status=ok/error/aborted 是业务终态，走 finishOk）
       consecutiveFailures = 0;
@@ -176,6 +189,9 @@ export function runAnalysisTask(
       }
     } catch (err) {
       if (stopped) return;
+      // abort 是调用方主动取消，不计入失败（cleanup 已经在 abort 之前把 stopped=true，
+      // 这里基本走不到；留一道保险）
+      if (isAbortError(err)) return;
       // 任何失败都计数（含 504/500 等 5xx、网络断、JSON 解析失败等）
       // 连续 MAX_CONSECUTIVE_FAILURES 次或累计 MAX_TOTAL_FAILURES 次 → 熔断，终止任务
       const e = err instanceof Error ? err : new Error(String(err));
@@ -184,13 +200,19 @@ export function runAnalysisTask(
     pollTimer = setTimeout(tick, POLL_INTERVAL_MS);
   };
 
-  const pushTimeline = (text: string, durationMs?: number) => {
+  const pushTimeline = (text: string, matchKey?: string, durationMs?: number) => {
     if (stopped) return;
     handlers.onTimelineAppend({
       ts: new Date().toISOString(),
       text,
       durationMs,
+      matchKey,
     });
+  };
+
+  const updateTimeline = (matchKey: string, text: string, durationMs: number) => {
+    if (stopped) return;
+    handlers.onTimelineUpdate(matchKey, { text, durationMs });
   };
 
   /**
@@ -218,12 +240,14 @@ export function runAnalysisTask(
   const fetchSnapshotUntilTerminal = async (): Promise<TaskSnapshot> => {
     for (let attempt = 0; attempt < SNAPSHOT_TERMINAL_MAX_ATTEMPTS; attempt++) {
       if (stopped) throw new Error('runAnalysisTask already stopped');
-      const snap = await fetchTaskSnapshot(traceId);
+      const snap = await fetchTaskSnapshot(traceId, { signal: ac.signal });
       if (isSnapshotReadyToDeliver(snap)) return snap;
       if (attempt < SNAPSHOT_TERMINAL_MAX_ATTEMPTS - 1) {
-        await new Promise<void>(resolve =>
-          setTimeout(resolve, SNAPSHOT_TERMINAL_RETRY_DELAY_MS)
-        );
+        // sleep 也响应 abort：cleanup 后立即退出等待
+        await new Promise<void>(resolve => {
+          const t = setTimeout(resolve, SNAPSHOT_TERMINAL_RETRY_DELAY_MS);
+          ac.signal.addEventListener('abort', () => { clearTimeout(t); resolve(); }, { once: true });
+        });
       }
     }
     throw new ApiError(
@@ -314,10 +338,12 @@ export function runAnalysisTask(
         const e = evt as ToolEvent;
         const text = toolText(e.name);
         if (!text) return;
+        const key = `tool:${e.name}`;
         if (e.action === 'start') {
           handlers.onStage(`正在${text}`);
+          pushTimeline(`${text}进行中`, key);
         } else {
-          pushTimeline(`${text}完成`, e.duration_ms);
+          updateTimeline(key, `${text}完成`, e.duration_ms);
         }
         return;
       }
@@ -325,10 +351,12 @@ export function runAnalysisTask(
       case 'dag_task': {
         const e = evt as DagTaskEvent;
         const text = toolText(e.task_name) ?? e.task_name;
+        const key = `dag:${e.task_name}`;
         if (e.action === 'start') {
           handlers.onStage(`正在执行 ${text}`);
+          pushTimeline(`${text} 执行中`, key);
         } else {
-          pushTimeline(`${text} 执行完成`, e.duration_ms);
+          updateTimeline(key, `${text} 执行完成`, e.duration_ms);
         }
         return;
       }

@@ -4,6 +4,8 @@ import type { ChatMessage, AnalysisTimelineEntry } from '../types/api';
 import Avatar from './Avatar';
 import { formatRelativeTime } from '../utils/format';
 import { getTypicalDurationMs } from '../utils/analysisDurationHistory';
+import { escapeHtml } from '../utils/html';
+import { showToast } from '../utils/toast';
 
 /** 这些错误码重试只会再失败；不显示"重试"按钮，改为"换个问法"提示。 */
 const RETRY_FORBIDDEN_CODES = new Set(['INTENT_UNCLEAR', 'NO_DATA']);
@@ -190,7 +192,10 @@ function MessageBubble({ message, userId, onTraceClick, onRegenerate }: Props) {
       setCopied('md');
       if (copyTimer.current !== null) clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopied(false), 2000);
-    } catch { /* ignore */ }
+    } catch {
+      // 非 HTTPS / 无权限 / iframe 内等都会抛。给用户一个明确反馈，别让"看起来啥也没发生"
+      showToast('复制失败，请手动选中文本复制', { level: 'warn' });
+    }
     setExportOpen(false);
   };
 
@@ -200,16 +205,24 @@ function MessageBubble({ message, userId, onTraceClick, onRegenerate }: Props) {
       setCopied('text');
       if (copyTimer.current !== null) clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopied(false), 2000);
-    } catch { /* ignore */ }
+    } catch {
+      showToast('复制失败，请手动选中文本复制', { level: 'warn' });
+    }
     setExportOpen(false);
   };
 
   const handleExportPdf = () => {
     const w = window.open('', '_blank');
     if (!w) return;
-    // 找到当前消息渲染的 markdown 内容 DOM，克隆到新窗口用于打印
-    const el = document.querySelector(`[data-msg-id="${message.id}"] .markdown-body`);
-    const html = el ? el.innerHTML : `<pre>${message.content}</pre>`;
+    // 找到当前消息渲染的 markdown 内容 DOM，克隆到新窗口用于打印。
+    // CSS.escape：后端返回的 id 可能含 `"`/`]`/ 空格，不转义会让选择器抛异常或匹配错元素。
+    const el = document.querySelector(
+      `[data-msg-id="${CSS.escape(message.id)}"] .markdown-body`
+    );
+    // fallback 分支拼接的是 markdown 原文；若 content 含 `</pre><script>` 会在 window.open
+    // 同源文档里执行 → XSS。这里用 escapeHtml 兜底（主分支 el.innerHTML 是 React 渲染后 DOM，
+    // react-markdown 默认不允许 raw HTML，已安全）。
+    const html = el ? el.innerHTML : `<pre>${escapeHtml(message.content)}</pre>`;
     w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>分析报告</title>
 <style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:40px;color:#1e293b;line-height:1.7;max-width:800px;margin:0 auto}

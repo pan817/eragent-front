@@ -82,7 +82,7 @@ export function useMessageSending({
 
   // 引用计数：一个 session 可以有多条并发进行中的任务（典型：刷新后同时恢复多条 pending 消息），
   // 任意一条 stop 都不应解锁 session loading —— 必须全部归零才算闲。
-  const [loadingCounts, setLoadingCounts] = useState<ReadonlyMap<string, number>>(new Map());
+  const [loadingCounts, setLoadingCounts] = useState<ReadonlyMap<string, number>>(() => new Map());
   const loading = (loadingCounts.get(sessionId) ?? 0) > 0;
   const busySessions = useMemo(() => {
     const s = new Set<string>();
@@ -95,33 +95,44 @@ export function useMessageSending({
   const [busyTip, setBusyTip] = useState(false);
   const busyTipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * loadingCounts 的 ref 镜像，用于 handleSend/handleRegenerate 入口的"同步"忙碌判定。
+   * 纯 state 版 `loading` 读的是闭包里上一次 render 的值，用户快速双击时两次点击都看到 false，
+   * 导致提交两次。这里先动 ref 再 setState，保证同一个 tick 内的第二次点击立即被拒。
+   */
+  const loadingCountsRef = useRef<Map<string, number>>(new Map());
+  const isSessionBusy = useCallback(
+    (sid: string) => (loadingCountsRef.current.get(sid) ?? 0) > 0,
+    []
+  );
+
   const startLoading = useCallback((sid: string) => {
-    setLoadingCounts(prev => {
-      const next = new Map(prev);
-      next.set(sid, (next.get(sid) ?? 0) + 1);
-      return next;
-    });
+    loadingCountsRef.current.set(sid, (loadingCountsRef.current.get(sid) ?? 0) + 1);
+    setLoadingCounts(new Map(loadingCountsRef.current));
   }, []);
 
   const stopLoading = useCallback((sid: string) => {
-    setLoadingCounts(prev => {
-      const cur = prev.get(sid) ?? 0;
-      if (cur <= 1) {
-        if (cur === 0) return prev;
-        const next = new Map(prev);
-        next.delete(sid);
-        return next;
-      }
-      const next = new Map(prev);
-      next.set(sid, cur - 1);
-      return next;
-    });
+    const cur = loadingCountsRef.current.get(sid) ?? 0;
+    if (cur <= 0) return;
+    if (cur === 1) loadingCountsRef.current.delete(sid);
+    else loadingCountsRef.current.set(sid, cur - 1);
+    setLoadingCounts(new Map(loadingCountsRef.current));
   }, []);
 
   const showBusyTip = useCallback(() => {
     setBusyTip(true);
     if (busyTipTimer.current !== null) clearTimeout(busyTipTimer.current);
     busyTipTimer.current = setTimeout(() => setBusyTip(false), 2000);
+  }, []);
+
+  // 卸载时清理 busyTipTimer，避免定时器持有 setBusyTip 闭包阻止 GC
+  useEffect(() => {
+    return () => {
+      if (busyTipTimer.current !== null) {
+        clearTimeout(busyTipTimer.current);
+        busyTipTimer.current = null;
+      }
+    };
   }, []);
 
   // ---- 异步流管理（仅 USE_ASYNC_ANALYZE=true 时会真正用到） ----
@@ -263,6 +274,38 @@ export function useMessageSending({
           sid
         );
       },
+      onTimelineUpdate: (matchKey, patch) => {
+        setMessages(
+          prev =>
+            prev.map(m => {
+              if (m.id !== assistantMsgId) return m;
+              const list = m.timeline ?? [];
+              // 从尾向头找最近一条同 key 且"进行中"（无 durationMs）的条目；
+              // 找到就就地改写；找不到说明 end 来前 start 丢了，append 一条完成态容错。
+              let updated = false;
+              const next: AnalysisTimelineEntry[] = [];
+              for (let i = list.length - 1; i >= 0; i--) {
+                const entry = list[i];
+                if (!updated && entry.matchKey === matchKey && entry.durationMs === undefined) {
+                  next.unshift({ ...entry, text: patch.text, durationMs: patch.durationMs });
+                  updated = true;
+                } else {
+                  next.unshift(entry);
+                }
+              }
+              if (!updated) {
+                next.push({
+                  ts: new Date().toISOString(),
+                  text: patch.text,
+                  durationMs: patch.durationMs,
+                  matchKey,
+                });
+              }
+              return { ...m, timeline: next };
+            }),
+          sid
+        );
+      },
       onDegraded: () => {
         setMessages(
           prev =>
@@ -311,6 +354,14 @@ export function useMessageSending({
     [setMessages, applySnapshotToMessage, stopLoading, notifyForSession, unregisterStream]
   );
 
+  /**
+   * 记录哪些 traceId 已经被 resume 过一次。effect 的 dep 里有 `messages`，流事件每到一次都会
+   * 导致 messages 重新引用，effect 重跑。没有这个 ref 的话，同一条 pending 消息会反复
+   * `setMessages({...msg, resumedAt: Date.now()})`，造成 O(N²) 渲染且 resumedAt 每次都是新值
+   * （虽然 isActive 兜底阻止了重复 start，但状态级联仍在）。
+   */
+  const resumedTracesRef = useRef<Set<string>>(new Set());
+
   // ---- 刷新/切会话后恢复订阅：对 status='sending' 且有 traceId 的消息重连 ----
   useEffect(() => {
     if (!USE_ASYNC_ANALYZE) return;
@@ -318,7 +369,9 @@ export function useMessageSending({
       if (m.role !== 'assistant') continue;
       if (m.status !== 'sending') continue;
       if (!m.traceId) continue;
+      if (resumedTracesRef.current.has(m.traceId)) continue;
       if (streams.isActive(m.traceId)) continue;
+      resumedTracesRef.current.add(m.traceId);
       startLoading(sessionId);
       // 打 resumedAt 标记让气泡展示"已恢复未完成的分析"横幅（自动淡出）
       const resumedAt = Date.now();
@@ -334,7 +387,8 @@ export function useMessageSending({
 
   // ---- handleSend ----
   const handleSend = useCallback(async (query: string, options: SendOptions = DEFAULT_SEND_OPTIONS) => {
-    if (loading) { showBusyTip(); return; }
+    // 同步读 ref，挡住双击/连点提交（state 版 `loading` 有一帧延迟）
+    if (isSessionBusy(sessionId)) { showBusyTip(); return; }
 
     if (!userId) {
       onNeedLogin(query);
@@ -483,12 +537,12 @@ export function useMessageSending({
     } finally {
       stopLoading(sendSessionId);
     }
-  }, [loading, showBusyTip, userId, sessionId, startLoading, stopLoading, setMessages, ensureRemoteSession, commitSessionFromAnalyze, isGuestMode, onNeedLogin, streams, buildStreamHandlers, registerStream]);
+  }, [isSessionBusy, showBusyTip, userId, sessionId, startLoading, stopLoading, setMessages, ensureRemoteSession, commitSessionFromAnalyze, isGuestMode, onNeedLogin, streams, buildStreamHandlers, registerStream]);
 
   // ---- handleRegenerate ----
   const handleRegenerate = useCallback(
     (assistantMsgId: string) => {
-      if (loading) { showBusyTip(); return; }
+      if (isSessionBusy(sessionId)) { showBusyTip(); return; }
 
       const msgs = messagesRef.current;
       const idx = msgs.findIndex(m => m.id === assistantMsgId);
@@ -618,7 +672,7 @@ export function useMessageSending({
       })();
     },
     // messages 通过 messagesRef 读，不进 deps —— 避免 SSE 事件打穿 MessageBubble 的 memo
-    [loading, showBusyTip, sessionId, startLoading, stopLoading, setMessages, userId, ensureRemoteSession, commitSessionFromAnalyze, isGuestMode, streams, buildStreamHandlers, registerStream]
+    [isSessionBusy, showBusyTip, sessionId, startLoading, stopLoading, setMessages, userId, ensureRemoteSession, commitSessionFromAnalyze, isGuestMode, streams, buildStreamHandlers, registerStream]
   );
 
   return {

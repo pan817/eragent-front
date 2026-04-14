@@ -29,11 +29,19 @@ export function useAnalysisStreams(): UseAnalysisStreamsReturn {
   }, []);
 
   const start = useCallback((traceId: string, handlers: AnalysisStreamHandlers) => {
-    activeRef.current.get(traceId)?.();
+    // 同 traceId 并发 start 是"不应发生"的状态：resume effect 已经用 isActive 兜底；
+    // handleSend/handleRegenerate 每次都是新 traceId。真的走到这里就是调用方有 bug，
+    // 静默 cleanup 旧流会让 UI 停在上一个流的中间态、调试极难。记 warn 留线索。
+    const existing = activeRef.current.get(traceId);
+    if (existing) {
+      console.warn('[useAnalysisStreams] duplicate start for traceId, superseding old stream:', traceId);
+      existing();
+    }
 
     const wrap: AnalysisStreamHandlers = {
       onStage: handlers.onStage,
       onTimelineAppend: handlers.onTimelineAppend,
+      onTimelineUpdate: handlers.onTimelineUpdate,
       onDegraded: handlers.onDegraded,
       onDone: snap => {
         activeRef.current.delete(traceId);

@@ -18,6 +18,8 @@ interface FetchOptions {
   body?: Record<string, unknown>;
   query?: Record<string, string | number | undefined>;
   idempotencyKey?: string;
+  /** 外部 AbortController.signal；调用方切换上下文时 abort 以避免陈旧响应覆写状态 */
+  signal?: AbortSignal;
 }
 
 /**
@@ -52,8 +54,12 @@ async function apiFetch<T>(path: string, opts: FetchOptions): Promise<T> {
 
   let resp: Response;
   try {
-    resp = await fetch(url, { method, headers, body });
+    resp = await fetch(url, { method, headers, body, signal: opts.signal });
   } catch (e) {
+    // 调用方主动 abort（如切会话）不应弹网络错误 toast，由上层 .catch 区分
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new ApiError(0, 'ABORTED', 'request aborted');
+    }
     throw new ApiError(
       0,
       'NETWORK_ERROR',
@@ -124,12 +130,13 @@ export function createSession(
 export function getSession(
   userId: string,
   sessionId: string,
-  opts: { messageLimit?: number } = {}
+  opts: { messageLimit?: number; signal?: AbortSignal } = {}
 ): Promise<ApiSessionDetailResponse> {
   return apiFetch<ApiSessionDetailResponse>(`${API_PREFIX}/sessions/${sessionId}`, {
     method: 'GET',
     userId,
     query: { message_limit: opts.messageLimit },
+    signal: opts.signal,
   });
 }
 

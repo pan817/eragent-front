@@ -8,15 +8,38 @@ import type {
 import { ApiError, ApiErrorCode } from '../types/api';
 import { API_PREFIX } from './constants';
 
-export async function analyzeQuery(request: AnalyzeRequest): Promise<AnalyzeResponse> {
+/**
+ * 读取响应体并解析 JSON；body 不是合法 JSON（如网关 502 返回 nginx HTML）时抛 ApiError
+ * 而不是让 SyntaxError 裸泄到调用方。调用方收到 ApiError 后可以走统一的错误文案路径。
+ */
+async function parseJsonOrThrow<T>(resp: Response, action: string): Promise<T> {
+  try {
+    return (await resp.json()) as T;
+  } catch {
+    throw new ApiError(
+      resp.status || 0,
+      'INVALID_RESPONSE',
+      `${action}返回非 JSON 响应（可能是网关错误页）`
+    );
+  }
+}
+
+export async function analyzeQuery(
+  request: AnalyzeRequest,
+  opts: { signal?: AbortSignal } = {}
+): Promise<AnalyzeResponse> {
   let response: Response;
   try {
     response = await fetch(`${API_PREFIX}/analyze`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
+      signal: opts.signal,
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new ApiError(0, ApiErrorCode.ABORTED, 'request aborted');
+    }
     throw new ApiError(0, ApiErrorCode.NETWORK_ERROR, '网络请求失败，请检查网络连接');
   }
 
@@ -24,7 +47,7 @@ export async function analyzeQuery(request: AnalyzeRequest): Promise<AnalyzeResp
     throw new ApiError(response.status, ApiErrorCode.http(response.status), `请求失败: ${response.status} ${response.statusText}`);
   }
 
-  return response.json();
+  return parseJsonOrThrow<AnalyzeResponse>(response, '分析');
 }
 
 export interface InitDataResponse {
@@ -46,7 +69,7 @@ export async function initData(): Promise<InitDataResponse> {
     throw new ApiError(response.status, ApiErrorCode.http(response.status), `请求失败: ${response.status} ${response.statusText}`);
   }
 
-  return response.json();
+  return parseJsonOrThrow<InitDataResponse>(response, '初始化');
 }
 
 export async function getTrace(traceId: string): Promise<TraceResponse> {
@@ -61,7 +84,7 @@ export async function getTrace(traceId: string): Promise<TraceResponse> {
     throw new ApiError(response.status, ApiErrorCode.http(response.status), `查询失败: ${response.status} ${response.statusText}`);
   }
 
-  return response.json();
+  return parseJsonOrThrow<TraceResponse>(response, '链路查询');
 }
 
 const traceCache = new Map<string, TraceResponse>();
@@ -97,15 +120,22 @@ export function clearTraceCache(): void {
 // 异步分析接口（docs/async_analyze_frontend.md）
 // ============================================
 
-export async function submitAnalyzeAsync(request: AnalyzeRequest): Promise<AnalysisTaskAck> {
+export async function submitAnalyzeAsync(
+  request: AnalyzeRequest,
+  opts: { signal?: AbortSignal } = {}
+): Promise<AnalysisTaskAck> {
   let response: Response;
   try {
     response = await fetch(`${API_PREFIX}/analyze/async`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
+      signal: opts.signal,
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new ApiError(0, ApiErrorCode.ABORTED, 'request aborted');
+    }
     throw new ApiError(0, ApiErrorCode.NETWORK_ERROR, '网络请求失败，请检查网络连接');
   }
 
@@ -122,14 +152,22 @@ export async function submitAnalyzeAsync(request: AnalyzeRequest): Promise<Analy
     throw new ApiError(response.status, code, message);
   }
 
-  return response.json();
+  return parseJsonOrThrow<AnalysisTaskAck>(response, '提交异步任务');
 }
 
-export async function fetchTaskSnapshot(traceId: string): Promise<TaskSnapshot> {
+export async function fetchTaskSnapshot(
+  traceId: string,
+  opts: { signal?: AbortSignal } = {}
+): Promise<TaskSnapshot> {
   let response: Response;
   try {
-    response = await fetch(`${API_PREFIX}/analyze/tasks/${traceId}`);
-  } catch {
+    response = await fetch(`${API_PREFIX}/analyze/tasks/${traceId}`, {
+      signal: opts.signal,
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new ApiError(0, ApiErrorCode.ABORTED, 'request aborted');
+    }
     throw new ApiError(0, ApiErrorCode.NETWORK_ERROR, '网络请求失败，请检查网络连接');
   }
 
@@ -141,7 +179,7 @@ export async function fetchTaskSnapshot(traceId: string): Promise<TaskSnapshot> 
     );
   }
 
-  return response.json();
+  return parseJsonOrThrow<TaskSnapshot>(response, '查询任务快照');
 }
 
 /** SSE 端点 URL（给 EventSource 用）；鉴权走 URL query，当前项目无鉴权 */

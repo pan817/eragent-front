@@ -18,6 +18,22 @@ interface BudgetEntry {
   budget: ContextBudget;
 }
 
+/**
+ * 从 span.attributes (Record<string, unknown>) 收敛成 ContextBudget。
+ * 校验必填字段都是数字；任一缺失返回 null，让调用方丢弃该 span。
+ * 原先用 `as unknown as ContextBudget` 强转，后端字段名改动时前端只会在运行时读到 undefined
+ * 并静默画空图，这里显式校验把失败前移到数据进入点。
+ */
+function toContextBudget(attrs: Record<string, unknown>): ContextBudget | null {
+  const total = attrs.total_inject_tokens;
+  const limit = attrs.model_context_limit;
+  const pct = attrs.budget_usage_pct;
+  if (typeof total !== 'number' || typeof limit !== 'number' || typeof pct !== 'number') {
+    return null;
+  }
+  return attrs as unknown as ContextBudget;
+}
+
 interface Props {
   spans: TraceSpan[];
   budgetWarningThreshold: number;
@@ -25,12 +41,16 @@ interface Props {
 }
 
 export default function TokenAnalysis({ spans, budgetWarningThreshold, onSelectSpan }: Props) {
-  const contextBudgets = useMemo<BudgetEntry[]>(() =>
-    spans
-      .filter(s => s.span_type === 'context_budget')
-      .map(s => ({ name: s.name, budget: s.attributes as unknown as ContextBudget })),
-    [spans],
-  );
+  const contextBudgets = useMemo<BudgetEntry[]>(() => {
+    const out: BudgetEntry[] = [];
+    for (const s of spans) {
+      if (s.span_type !== 'context_budget') continue;
+      const budget = toContextBudget(s.attributes);
+      // budget 为 null 说明 attributes 结构与契约不符（必填字段缺失），跳过避免后续渲染崩溃
+      if (budget) out.push({ name: s.name, budget });
+    }
+    return out;
+  }, [spans]);
 
   const modelSpanRows = useMemo<ModelSpanRow[]>(() =>
     spans

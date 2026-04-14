@@ -32,6 +32,8 @@ const MAX_SESSIONS = 50;
 const TITLE_MAX = 24;
 
 import { genId } from '../utils/id';
+import { safeSetItem } from '../utils/safeStorage';
+import { showToastOnce } from '../utils/toast';
 
 const nowMs = () => Date.now();
 
@@ -69,9 +71,16 @@ const loadLocal = (): LocalPersistedState => {
     const s = makeEmptySession();
     return { sessions: [s], currentId: s.id };
   }
+  let raw: string | null = null;
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (raw) {
+    raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+  } catch {
+    // 隐私模式 / 读盘失败：直接回退到空会话，safeStorage 不读所以这里手动 try
+    const s = makeEmptySession();
+    return { sessions: [s], currentId: s.id };
+  }
+  if (raw) {
+    try {
       const parsed = JSON.parse(raw) as {
         sessions: Array<Partial<ChatSession> & { messages?: unknown[] }>;
         currentId: string;
@@ -95,9 +104,24 @@ const loadLocal = (): LocalPersistedState => {
         const currentId = sessions.find(s => s.id === parsed.currentId)?.id ?? sessions[0].id;
         return { sessions, currentId };
       }
+    } catch (err) {
+      // 损坏的数据 (磁盘故障 / 其它 tab 并发写坏 / 手动改 storage) —— 直接丢弃会让
+      // guest 用户看到"全部历史消失"，没法追责也没法恢复。这里做一次性备份：
+      // 把原 raw 挪到带时间戳的 key，留给用户/支持人员可取。toast 告知发生了什么。
+      const backupKey = `${LOCAL_STORAGE_KEY}-corrupted-${Date.now()}`;
+      try {
+        localStorage.setItem(backupKey, raw);
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+      } catch {
+        // 备份写失败（quota 等）也不阻塞流程
+      }
+      console.warn('[useChatSessions] localStorage 解析失败，已备份到', backupKey, err);
+      showToastOnce(
+        'chat-sessions-corrupted',
+        '本地会话数据损坏，已备份并重置。若需恢复可联系支持。',
+        { level: 'warn', duration: 6000 }
+      );
     }
-  } catch {
-    // ignore
   }
   const s = makeEmptySession();
   return { sessions: [s], currentId: s.id };
@@ -105,11 +129,8 @@ const loadLocal = (): LocalPersistedState => {
 
 const saveLocal = (state: LocalPersistedState) => {
   if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // quota / disabled — ignore
-  }
+  // safeSetItem 内部已处理配额/隐私模式，并用 showToastOnce 首次失败时告知用户
+  safeSetItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
 };
 
 // ============================================
@@ -172,6 +193,22 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
   const detailLoadedRef = useRef<Set<string>>(new Set());
   // 并发保护：同一个 temp id 多次调用 ensureRemoteSession 复用同一个 promise
   const pendingEnsureRef = useRef<Map<string, Promise<string>>>(new Map());
+  /**
+   * switchTo 并发保护：每个 session 的 GET 请求持有一个 AbortController；
+   * 再次 switchTo 同一 / 其它 session 时 abort 所有未完成请求，避免旧响应覆写当前状态
+   * （A→B→C 快速切换时 B 的响应晚到，`setSessions(... id === B ? s : x)` 会把用户已修改的
+   * B 本地状态（如刚发送的 pending 消息）用服务端快照覆盖掉）。
+   */
+  const detailLoadingControllersRef = useRef<Map<string, AbortController>>(new Map());
+
+  // 组件卸载时 abort 所有在途 getSession，防止回调里 setSessions 落到已卸载 hook
+  useEffect(() => {
+    const controllers = detailLoadingControllersRef.current;
+    return () => {
+      controllers.forEach(c => c.abort());
+      controllers.clear();
+    };
+  }, []);
 
   // guest 模式下把 state 同步到 localStorage
   useEffect(() => {
@@ -318,17 +355,32 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
       }
 
       setDetailLoading(true);
-      apiGetSession(userId, id)
+      // 先 abort 此 session 上一轮未完成的 load（若有），避免两次响应相互覆盖
+      detailLoadingControllersRef.current.get(id)?.abort();
+      const ac = new AbortController();
+      detailLoadingControllersRef.current.set(id, ac);
+      apiGetSession(userId, id, { signal: ac.signal })
         .then(resp => {
+          if (ac.signal.aborted) return;
           const msgs = resp.messages.map(fromApiMessage).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
           const s = fromApiSession(resp.session, msgs);
           setSessions(prev => prev.map(x => (x.id === id ? s : x)));
           detailLoadedRef.current.add(id);
         })
         .catch(err => {
+          // abort 是有意为之的取消，不打错误日志也不进负 cache
+          if (err instanceof ApiError && err.code === 'ABORTED') return;
           console.error('[useChatSessions] getSession failed:', err);
+          // 失败也标记为 "已尝试"，避免每次切回这个 session 都重新请求（请求风暴）。
+          // 用户要重试只能靠其它路径（刷新/重新登录），这是有意的保守策略。
+          detailLoadedRef.current.add(id);
         })
-        .finally(() => setDetailLoading(false));
+        .finally(() => {
+          if (detailLoadingControllersRef.current.get(id) === ac) {
+            detailLoadingControllersRef.current.delete(id);
+          }
+          if (!ac.signal.aborted) setDetailLoading(false);
+        });
     },
     [isGuestMode, userId]
   );

@@ -22,6 +22,7 @@ function makeHandlers() {
   return {
     onStage: vi.fn(),
     onTimelineAppend: vi.fn(),
+    onTimelineUpdate: vi.fn(),
     onDone: vi.fn(),
     onError: vi.fn(),
     onDegraded: vi.fn(),
@@ -76,7 +77,7 @@ describe('runAnalysisTask', () => {
     expect(h.onTimelineAppend.mock.calls[0][0].text).toBe('已识别分析意图');
   });
 
-  it('tool start updates stage, tool end appends timeline', async () => {
+  it('tool start appends pending entry; tool end updates same entry by matchKey', async () => {
     const h = makeHandlers();
     runAnalysisTask('t1', h);
     getLastEventSource()!.open();
@@ -85,17 +86,50 @@ describe('runAnalysisTask', () => {
       type: 'tool', trace_id: 't1', ts: 'x', seq: 1,
       action: 'start', name: 'query_purchase_orders',
     });
+    // start 触发：气泡顶部文案 + 时间线追加一条"进行中"（无 durationMs）
     expect(h.onStage).toHaveBeenCalledWith('正在查询采购订单');
-    expect(h.onTimelineAppend).not.toHaveBeenCalled();
+    expect(h.onTimelineAppend).toHaveBeenCalledTimes(1);
+    expect(h.onTimelineAppend.mock.calls[0][0]).toMatchObject({
+      text: '查询采购订单进行中',
+      matchKey: 'tool:query_purchase_orders',
+    });
+    expect(h.onTimelineAppend.mock.calls[0][0].durationMs).toBeUndefined();
+    expect(h.onTimelineUpdate).not.toHaveBeenCalled();
 
     getLastEventSource()!.emit('tool', {
       type: 'tool', trace_id: 't1', ts: 'x', seq: 2,
       action: 'end', name: 'query_purchase_orders', duration_ms: 1200, status: 'ok',
     });
+    // end 触发：按 matchKey 更新，不再 append
     expect(h.onTimelineAppend).toHaveBeenCalledTimes(1);
-    expect(h.onTimelineAppend.mock.calls[0][0]).toMatchObject({
+    expect(h.onTimelineUpdate).toHaveBeenCalledTimes(1);
+    expect(h.onTimelineUpdate.mock.calls[0][0]).toBe('tool:query_purchase_orders');
+    expect(h.onTimelineUpdate.mock.calls[0][1]).toEqual({
       text: '查询采购订单完成',
       durationMs: 1200,
+    });
+  });
+
+  it('dag_task start appends pending entry; end updates by matchKey', async () => {
+    const h = makeHandlers();
+    runAnalysisTask('t1', h);
+    getLastEventSource()!.open();
+
+    getLastEventSource()!.emit('dag_task', {
+      type: 'dag_task', trace_id: 't1', ts: 'x', seq: 1,
+      action: 'start', task_name: 't1:classify_anomalies',
+    });
+    expect(h.onTimelineAppend).toHaveBeenCalledTimes(1);
+    expect(h.onTimelineAppend.mock.calls[0][0].matchKey).toBe('dag:t1:classify_anomalies');
+    expect(h.onTimelineAppend.mock.calls[0][0].durationMs).toBeUndefined();
+
+    getLastEventSource()!.emit('dag_task', {
+      type: 'dag_task', trace_id: 't1', ts: 'x', seq: 2,
+      action: 'end', task_name: 't1:classify_anomalies', duration_ms: 800, status: 'ok',
+    });
+    expect(h.onTimelineUpdate).toHaveBeenCalledWith('dag:t1:classify_anomalies', {
+      text: expect.stringMatching(/执行完成$/),
+      durationMs: 800,
     });
   });
 

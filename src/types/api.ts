@@ -125,6 +125,13 @@ export interface AnalysisTimelineEntry {
   ts: string;
   text: string;
   durationMs?: number;
+  /**
+   * 用于 start↔end 匹配的稳定 key（如 `tool:query_purchase_orders`）。
+   * tool/dag_task 在 start 事件即入列为"进行中"，end 事件到达时按 matchKey 找最近一条
+   * 尚未完成（无 durationMs）的条目就地回填文案与耗时；找不到则追加一条（容错）。
+   * stage 等一次性事件不带 matchKey。
+   */
+  matchKey?: string;
 }
 
 // ============================================
@@ -204,6 +211,8 @@ export interface ApiErrorBody {
 export const ApiErrorCode = {
   NETWORK_ERROR: 'NETWORK_ERROR',
   TIMEOUT: 'TIMEOUT',
+  /** 调用方主动 abort（上下文切换/组件卸载），UI 层不应以此弹错误提示 */
+  ABORTED: 'ABORTED',
   /** 生成 HTTP 状态码形式的 code，如 HTTP_500 */
   http: (status: number) => `HTTP_${status}`,
 } as const;

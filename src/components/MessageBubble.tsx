@@ -201,7 +201,12 @@ h1,h2,h3{margin-top:24px;margin-bottom:8px}
 
         {!isUser && message.status === 'success' && (
           <div className="message-toolbar">
-            <span className="message-time">{formatRelativeTime(message.timestamp)}</span>
+            <span
+              className="message-time"
+              title={new Date(message.timestamp).toLocaleString()}
+            >
+              {formatRelativeTime(message.timestamp)}
+            </span>
             {message.durationMs && (
               <>
                 <span className="toolbar-sep">·</span>
@@ -291,7 +296,12 @@ h1,h2,h3{margin-top:24px;margin-bottom:8px}
 
         {isUser && (
           <div className="message-toolbar message-toolbar-user">
-            <span className="message-time">{formatRelativeTime(message.timestamp)}</span>
+            <span
+              className="message-time"
+              title={new Date(message.timestamp).toLocaleString()}
+            >
+              {formatRelativeTime(message.timestamp)}
+            </span>
           </div>
         )}
         {copyAnnouncement && (

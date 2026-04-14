@@ -9,6 +9,7 @@ import Sidebar from './Sidebar';
 import FeedbackButton from './FeedbackButton';
 import ExamplePromptsDrawer from './ExamplePromptsDrawer';
 import TestDataTipsModal from './TestDataTipsModal';
+import ShortcutsModal from './ShortcutsModal';
 import type { ExamplePrompt } from '../data/examplePrompts';
 import { SUGGESTIONS } from '../data/chatConstants';
 import './ChatWindow.css';
@@ -50,6 +51,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
   const [pendingQuery, setPendingQuery] = useState<string | null>(null);
   const [examplesOpen, setExamplesOpen] = useState(false);
   const [tipsOpen, setTipsOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [draft, setDraft] = useState<{ text: string; nonce: number }>({ text: '', nonce: 0 });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -126,6 +128,21 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
     return undefined;
   }, [messages]);
 
+  // `?` 打开快捷键面板（焦点在可编辑元素中时忽略）
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== '?') return;
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+      const tag = t.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || t.isContentEditable) return;
+      e.preventDefault();
+      setShortcutsOpen(true);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   // Esc 关闭 TraceModal
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -190,6 +207,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
         onNewChat={handleNewChat}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(v => !v)}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
       />
 
       <main className="main-pane">
@@ -280,6 +298,8 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
       />
 
       <TestDataTipsModal open={tipsOpen} onClose={() => setTipsOpen(false)} />
+
+      <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       {activeTraceId && (
         <Suspense fallback={null}>

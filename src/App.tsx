@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import ChatWindow from './components/ChatWindow'
 import ErrorBoundary from './components/ErrorBoundary'
 import ToastHost from './components/ToastHost'
+import { useOnline } from './hooks/useOnline'
 import { safeGetItem, safeSetItem, safeRemoveItem } from './utils/safeStorage'
 import { showToast } from './utils/toast'
 import { ApiError } from './types/api'
@@ -11,6 +12,7 @@ const USER_ID_KEY = 'eragent_user_id'
 
 function App() {
   const [userId, setUserId] = useState<string | null>(() => safeGetItem(USER_ID_KEY))
+  const online = useOnline()
 
   const handleLogin = (name: string) => {
     safeSetItem(USER_ID_KEY, name)
@@ -40,6 +42,12 @@ function App() {
 
   return (
     <ErrorBoundary>
+      {!online && (
+        <div className="offline-banner" role="status" aria-live="polite">
+          <span className="offline-banner-dot" aria-hidden="true" />
+          网络连接已断开，请求将暂时失败
+        </div>
+      )}
       <ChatWindow
         userId={userId}
         onLogin={handleLogin}

@@ -25,6 +25,7 @@ interface SidebarProps {
   onNewChat: () => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  onOpenShortcuts?: () => void;
 }
 
 
@@ -45,6 +46,7 @@ export default function Sidebar({
   onNewChat,
   collapsed,
   onToggleCollapse,
+  onOpenShortcuts,
 }: SidebarProps) {
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
@@ -269,13 +271,18 @@ export default function Sidebar({
                       maxLength={80}
                     />
                   ) : (
-                    <div className="sidebar-history-item-title">
+                    <div
+                      className="sidebar-history-item-title"
+                      title={isEmpty ? undefined : s.title}
+                    >
                       {isEmpty ? <span className="is-muted">新对话</span> : s.title}
                     </div>
                   )}
                   {!isEditing && (
                     <div className="sidebar-history-item-meta">
-                      <span>{formatRelativeTimeFromTs(s.updatedAt)}</span>
+                      <span title={new Date(s.updatedAt).toLocaleString()}>
+                        {formatRelativeTimeFromTs(s.updatedAt)}
+                      </span>
                       {!isEmpty && <span>· {userMsgCount} 条</span>}
                     </div>
                   )}
@@ -348,7 +355,8 @@ export default function Sidebar({
               type="button"
               className="icon-btn sidebar-shortcuts-btn"
               aria-label="快捷键"
-              title="快捷键"
+              title="快捷键（按 ? 打开）"
+              onClick={onOpenShortcuts}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="2" y="4" width="20" height="16" rx="2" />

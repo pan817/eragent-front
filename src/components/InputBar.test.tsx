@@ -83,7 +83,7 @@ describe('InputBar', () => {
     render(<InputBar {...defaultProps} />)
 
     await userEvent.type(screen.getByRole('textbox'), 'abc')
-    expect(screen.getByText('3 字')).toBeInTheDocument()
+    expect(screen.getByText(/3\s*\/\s*\d+/)).toBeInTheDocument()
   })
 
   it('shows role selector with default "通用分析"', () => {
@@ -298,5 +298,118 @@ describe('InputBar — keyboard menu navigation', () => {
 
     fireEvent.keyDown(trigger, { key: 'Escape' })
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('navigates role menu with ArrowUp', () => {
+    render(<InputBar {...defaultProps} />)
+
+    const trigger = screen.getByText('通用分析').closest('button')!
+    fireEvent.click(trigger)
+    fireEvent.keyDown(trigger, { key: 'ArrowUp' })
+
+    const focused = document.querySelector('.input-role-item.is-focused')
+    expect(focused).toBeInTheDocument()
+  })
+})
+
+describe('InputBar — mod+Enter mode', () => {
+  it('sends on mod+Enter after toggling shortcut', async () => {
+    const onSend = vi.fn()
+    render(<InputBar {...defaultProps} onSend={onSend} />)
+
+    // Toggle to mod+Enter mode
+    const hintBtn = document.querySelector('.input-hint-button') as HTMLButtonElement
+    fireEvent.click(hintBtn)
+
+    const textarea = screen.getByRole('textbox')
+    await userEvent.type(textarea, '消息')
+
+    // Bare Enter should NOT send
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(onSend).not.toHaveBeenCalled()
+
+    // Mod+Enter should send
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true })
+    expect(onSend).toHaveBeenCalled()
+  })
+
+  it('sends on Ctrl+Enter in mod-enter mode', async () => {
+    const onSend = vi.fn()
+    render(<InputBar {...defaultProps} onSend={onSend} />)
+
+    // Toggle to mod+Enter mode
+    const hintBtn = document.querySelector('.input-hint-button') as HTMLButtonElement
+    fireEvent.click(hintBtn)
+
+    const textarea = screen.getByRole('textbox')
+    await userEvent.type(textarea, '消息')
+    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
+
+    expect(onSend).toHaveBeenCalled()
+  })
+})
+
+describe('InputBar — long message soft protection', () => {
+  it('does not send on bare Enter when text has 3+ lines', async () => {
+    const onSend = vi.fn()
+    render(<InputBar {...defaultProps} onSend={onSend} />)
+
+    const textarea = screen.getByRole('textbox')
+    // Set a 3-line message
+    fireEvent.change(textarea, { target: { value: '第一行\n第二行\n第三行' } })
+
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('sends on mod+Enter even with 3+ lines', async () => {
+    const onSend = vi.fn()
+    render(<InputBar {...defaultProps} onSend={onSend} />)
+
+    const textarea = screen.getByRole('textbox')
+    fireEvent.change(textarea, { target: { value: '第一行\n第二行\n第三行' } })
+
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true })
+    expect(onSend).toHaveBeenCalled()
+  })
+
+  it('shows long message mode indicator', () => {
+    render(<InputBar {...defaultProps} />)
+
+    const textarea = screen.getByRole('textbox')
+    fireEvent.change(textarea, { target: { value: '第一行\n第二行\n第三行' } })
+
+    const indicator = document.querySelector('.input-hint-soft-protect')
+    expect(indicator).toBeInTheDocument()
+    expect(indicator?.textContent).toContain('长消息模式')
+  })
+})
+
+describe('InputBar — external draft injection', () => {
+  it('fills input when draftText and draftNonce change', () => {
+    const { rerender } = render(
+      <InputBar {...defaultProps} draftNonce={0} draftText="" />,
+    )
+
+    rerender(
+      <InputBar {...defaultProps} draftNonce={1} draftText="注入的文本" />,
+    )
+
+    expect(screen.getByRole('textbox')).toHaveValue('注入的文本')
+  })
+})
+
+describe('InputBar — IME handling', () => {
+  it('ignores Enter during IME composition', async () => {
+    const onSend = vi.fn()
+    render(<InputBar {...defaultProps} onSend={onSend} />)
+
+    const textarea = screen.getByRole('textbox')
+    await userEvent.type(textarea, '你好')
+
+    // Simulate IME composing Enter (keyCode 229)
+    fireEvent.keyDown(textarea, { key: 'Enter', keyCode: 229, nativeEvent: { isComposing: true } })
+
+    expect(onSend).not.toHaveBeenCalled()
   })
 })

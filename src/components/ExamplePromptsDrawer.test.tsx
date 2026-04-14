@@ -13,6 +13,7 @@ const defaultProps = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  try { sessionStorage.clear() } catch { /* ignore */ }
 })
 
 describe('ExamplePromptsDrawer', () => {
@@ -42,9 +43,9 @@ describe('ExamplePromptsDrawer', () => {
     render(<ExamplePromptsDrawer {...defaultProps} />)
 
     expect(screen.getByText('全部')).toBeInTheDocument()
-    // First few categories should be visible
+    // First few categories should be visible (labels appear in both chip and group header)
     for (let i = 0; i < Math.min(5, CATEGORIES.length); i++) {
-      expect(screen.getByText(CATEGORIES[i].label)).toBeInTheDocument()
+      expect(screen.getAllByText(CATEGORIES[i].label).length).toBeGreaterThanOrEqual(1)
     }
   })
 
@@ -65,7 +66,7 @@ describe('ExamplePromptsDrawer', () => {
 
     // All categories should now be visible
     for (const c of CATEGORIES) {
-      expect(screen.getByText(c.label)).toBeInTheDocument()
+      expect(screen.getAllByText(c.label).length).toBeGreaterThanOrEqual(1)
     }
     expect(screen.getByText('收起')).toBeInTheDocument()
   })
@@ -74,7 +75,9 @@ describe('ExamplePromptsDrawer', () => {
     render(<ExamplePromptsDrawer {...defaultProps} />)
 
     const firstCategory = CATEGORIES[0]
-    fireEvent.click(screen.getByText(firstCategory.label))
+    // Click the chip (first match), not the group header
+    const chips = screen.getAllByText(firstCategory.label)
+    fireEvent.click(chips[0].closest('button')!)
 
     // Items should only belong to selected category
     const items = document.querySelectorAll('.examples-item')

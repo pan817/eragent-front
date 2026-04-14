@@ -43,6 +43,8 @@ const OPTIONS_STORAGE_KEY = 'erp-agent-input-options-v1';
 const SHORTCUT_STORAGE_KEY = 'erp-agent-input-shortcut-v1';
 /** 消息行数 ≥ 此值时启用"长消息软保护"：裸 Enter 插换行而非发送 */
 const SOFT_PROTECT_MIN_LINES = 3;
+/** 输入最大字符数（粘贴长文本时截断并提示） */
+const INPUT_MAX_LENGTH = 4000;
 
 type SendShortcut = 'enter' | 'mod-enter';
 
@@ -116,6 +118,7 @@ export default function InputBar({
   onOpenTips,
 }: Props) {
   const [input, setInput] = useState('');
+  const [composing, setComposing] = useState(false);
   const [options, setOptions] = useState<SendOptions>(loadOptions);
   const [sendShortcut, setSendShortcut] = useState<SendShortcut>(loadShortcut);
   const [justSwitched, setJustSwitched] = useState(false);
@@ -327,18 +330,31 @@ export default function InputBar({
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
+    let val = e.target.value;
+    if (val.length > INPUT_MAX_LENGTH) {
+      val = val.slice(0, INPUT_MAX_LENGTH);
+    }
     setInput(val);
     const el = e.target;
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 180) + 'px';
+    // IME 合成期间跳过 autosize，避免中文输入途中布局抖动
+    if (!composing) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 180) + 'px';
+    }
 
-    // "/" 斜杠命令检测：仅在���首输入 "/" 时触发
+    // "/" 斜杠命令检测：仅在行首输入 "/" 时触发
     if (val.startsWith('/') && !val.includes('\n')) {
       setSlashOpen(true);
     } else {
       setSlashOpen(false);
     }
+  };
+
+  const handleCompositionEnd = (e: React.CompositionEvent<HTMLTextAreaElement>) => {
+    setComposing(false);
+    const el = e.currentTarget;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 180) + 'px';
   };
 
   const handleNewPrompt = () => {
@@ -565,8 +581,11 @@ export default function InputBar({
           value={input}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
+          onCompositionStart={() => setComposing(true)}
+          onCompositionEnd={handleCompositionEnd}
           placeholder={disabled ? '助手正在分析中...' : '输入 / 浏览示例，或直接向 AI 提问...'}
           disabled={disabled}
+          maxLength={INPUT_MAX_LENGTH}
           rows={1}
         />
 
@@ -601,7 +620,12 @@ export default function InputBar({
               </span>
             )}
             <span className="input-meta-sep">·</span>
-            <span className="input-char-count">{charCount} 字</span>
+            <span
+              className={`input-char-count ${charCount >= INPUT_MAX_LENGTH ? 'is-limit' : charCount > INPUT_MAX_LENGTH * 0.9 ? 'is-warn' : ''}`}
+              title={`最多 ${INPUT_MAX_LENGTH} 字`}
+            >
+              {charCount} / {INPUT_MAX_LENGTH}
+            </span>
             {lastDurationMs !== undefined && lastDurationMs > 0 && (
               <>
                 <span className="input-meta-sep">·</span>

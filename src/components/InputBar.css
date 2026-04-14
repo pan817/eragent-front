@@ -337,6 +337,16 @@
   font-variant-numeric: tabular-nums;
 }
 
+.input-char-count.is-warn {
+  color: #d97706;
+  font-weight: 600;
+}
+
+.input-char-count.is-limit {
+  color: var(--danger, #dc2626);
+  font-weight: 700;
+}
+
 .input-last-duration {
   color: var(--text-muted);
   font-weight: 500;

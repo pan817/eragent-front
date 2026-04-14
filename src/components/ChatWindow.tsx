@@ -85,9 +85,9 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
   }, []);
 
   useEffect(() => {
-    if (shouldAutoScroll.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }
+    if (!shouldAutoScroll.current) return;
+    // 流式输出期间用 'nearest' 减少强拉，避免打断用户选中/翻阅
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [messages]);
 
   // 自动滚动到底部：发送消息时

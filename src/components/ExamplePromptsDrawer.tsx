@@ -33,26 +33,52 @@ function highlight(text: string, query: string): React.ReactNode {
 
 /** 默认显示的分类数（不含"全部"按钮），超出部分需展开 */
 const VISIBLE_CATEGORY_COUNT = 5;
+const SEARCH_STORAGE_KEY = 'erp-agent-examples-search-v1';
+const FILTER_STORAGE_KEY = 'erp-agent-examples-filter-v1';
 
 export default function ExamplePromptsDrawer({ open, onClose, onPick }: Props) {
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<FilterKey>('all');
+  const [search, setSearch] = useState(() => {
+    try {
+      return sessionStorage.getItem(SEARCH_STORAGE_KEY) ?? '';
+    } catch {
+      return '';
+    }
+  });
+  const [filter, setFilter] = useState<FilterKey>(() => {
+    try {
+      return (sessionStorage.getItem(FILTER_STORAGE_KEY) as FilterKey) || 'all';
+    } catch {
+      return 'all';
+    }
+  });
   const [chipsExpanded, setChipsExpanded] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
   useFocusTrap(drawerRef, open);
 
-  // 打开时聚焦搜索框，关闭时清空
+  // 打开时聚焦搜索框；搜索/分类选择保留在 sessionStorage，关闭后再次打开恢复
   useEffect(() => {
-    if (open) {
-      const t = setTimeout(() => searchRef.current?.focus(), 120);
-      return () => clearTimeout(t);
-    } else {
-      setSearch('');
-      setFilter('all');
-      setChipsExpanded(false);
-    }
+    if (!open) return;
+    const t = setTimeout(() => searchRef.current?.focus(), 120);
+    return () => clearTimeout(t);
   }, [open]);
+
+  useEffect(() => {
+    try {
+      if (search) sessionStorage.setItem(SEARCH_STORAGE_KEY, search);
+      else sessionStorage.removeItem(SEARCH_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  }, [search]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FILTER_STORAGE_KEY, filter);
+    } catch {
+      // ignore
+    }
+  }, [filter]);
 
   // Escape 关闭
   useEffect(() => {

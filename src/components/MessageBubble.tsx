@@ -137,6 +137,9 @@ h1,h2,h3{margin-top:24px;margin-bottom:8px}
   };
 
 
+  const copyAnnouncement =
+    copied === 'md' ? '已复制 Markdown' : copied === 'text' ? '已复制纯文本' : '';
+
   return (
     <div className={`message-row ${isUser ? 'message-row-user' : 'message-row-assistant'}`} data-msg-id={message.id}>
       {isUser ? (
@@ -287,6 +290,11 @@ h1,h2,h3{margin-top:24px;margin-bottom:8px}
           <div className="message-toolbar message-toolbar-user">
             <span className="message-time">{formatRelativeTime(message.timestamp)}</span>
           </div>
+        )}
+        {copyAnnouncement && (
+          <span className="sr-only" role="status" aria-live="polite">
+            {copyAnnouncement}
+          </span>
         )}
       </div>
     </div>

@@ -66,7 +66,13 @@ export default function Login({ onLogin, onCancel }: LoginProps) {
         if (e.target === e.currentTarget && onCancel) onCancel();
       }}
     >
-      <div className="login-card" role="dialog" aria-modal="true" ref={dialogRef}>
+      <div
+        className="login-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-dialog-title"
+        ref={dialogRef}
+      >
         {onCancel && (
           <button
             type="button"
@@ -94,7 +100,7 @@ export default function Login({ onLogin, onCancel }: LoginProps) {
               />
             </svg>
           </div>
-          <h1>登录</h1>
+          <h1 id="login-dialog-title">登录</h1>
           <p>请输入用户名以开始使用</p>
         </div>
 

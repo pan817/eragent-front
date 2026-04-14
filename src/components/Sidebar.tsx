@@ -51,6 +51,7 @@ export default function Sidebar({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
+  const preEditFocusRef = useRef<HTMLElement | null>(null);
 
   // 进入编辑态时聚焦并全选
   useEffect(() => {
@@ -61,23 +62,42 @@ export default function Sidebar({
   }, [editingId]);
 
   const startEditing = (id: string, currentTitle: string) => {
+    const active = document.activeElement;
+    preEditFocusRef.current =
+      active instanceof HTMLElement && active.getAttribute('role') === 'option'
+        ? active
+        : (document.querySelector<HTMLElement>(`[data-session-id="${id}"]`) ?? null);
     setEditingId(id);
     setEditingTitle(currentTitle);
   };
 
+  const restoreFocusAfterEdit = (id: string | null) => {
+    const target =
+      preEditFocusRef.current ??
+      (id ? document.querySelector<HTMLElement>(`[data-session-id="${id}"]`) : null);
+    preEditFocusRef.current = null;
+    if (target) {
+      requestAnimationFrame(() => target.focus());
+    }
+  };
+
   const commitEdit = () => {
     if (!editingId) return;
+    const id = editingId;
     const trimmed = editingTitle.trim();
     if (trimmed && trimmed !== editingId) {
-      onRenameSession(editingId, trimmed);
+      onRenameSession(id, trimmed);
     }
     setEditingId(null);
     setEditingTitle('');
+    restoreFocusAfterEdit(id);
   };
 
   const cancelEdit = () => {
+    const id = editingId;
     setEditingId(null);
     setEditingTitle('');
+    restoreFocusAfterEdit(id);
   };
 
   const stats = useMemo(() => {
@@ -149,6 +169,7 @@ export default function Sidebar({
         <input
           type="text"
           placeholder="搜索历史对话..."
+          aria-label="搜索历史对话"
           value={search}
           onChange={e => onSearchChange(e.target.value)}
         />
@@ -216,6 +237,7 @@ export default function Sidebar({
                 role="option"
                 tabIndex={0}
                 aria-selected={isActive}
+                data-session-id={s.id}
                 className={`sidebar-history-item ${isActive ? 'is-active' : ''}`}
                 onClick={() => {
                   if (!isEditing) onSwitchSession(s.id);

@@ -375,7 +375,10 @@ export default function TestDataTipsModal({ open, onClose }: Props) {
               key={t.key}
               type="button"
               role="tab"
+              id={`tips-tab-${t.key}`}
               aria-selected={tab === t.key}
+              aria-controls={`tips-panel-${t.key}`}
+              tabIndex={tab === t.key ? 0 : -1}
               className={`tips-tab ${tab === t.key ? 'is-active' : ''}`}
               onClick={() => setTab(t.key)}
             >
@@ -385,7 +388,12 @@ export default function TestDataTipsModal({ open, onClose }: Props) {
           ))}
         </div>
 
-        <div className="tips-body">
+        <div
+          className="tips-body"
+          role="tabpanel"
+          id={`tips-panel-${tab}`}
+          aria-labelledby={`tips-tab-${tab}`}
+        >
           <div className="tips-lead">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />

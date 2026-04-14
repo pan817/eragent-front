@@ -388,7 +388,7 @@ export default function InputBar({
               </button>
               <Popover
                 open={roleMenuOpen}
-                anchorEl={roleMenuRef.current}
+                anchorRef={roleMenuRef}
                 onClose={() => setRoleMenuOpen(false)}
                 className="input-role-menu"
               >
@@ -447,7 +447,7 @@ export default function InputBar({
               </button>
               <Popover
                 open={outputMenuOpen}
-                anchorEl={outputMenuRef.current}
+                anchorRef={outputMenuRef}
                 onClose={() => setOutputMenuOpen(false)}
                 className="input-role-menu"
               >
@@ -503,7 +503,7 @@ export default function InputBar({
               </button>
               <Popover
                 open={timeMenuOpen}
-                anchorEl={timeMenuRef.current}
+                anchorRef={timeMenuRef}
                 onClose={() => setTimeMenuOpen(false)}
                 className="input-role-menu"
               >

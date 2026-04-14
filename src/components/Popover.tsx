@@ -5,12 +5,14 @@ import {
   useState,
   type CSSProperties,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
 
 interface PopoverProps {
   open: boolean;
-  anchorEl: HTMLElement | null;
+  /** 锚点元素的 ref；Popover 内部仅在 effect 中读取 .current */
+  anchorRef: RefObject<HTMLElement | null>;
   onClose: () => void;
   children: ReactNode;
   className?: string;
@@ -29,7 +31,7 @@ interface PopoverProps {
  */
 export default function Popover({
   open,
-  anchorEl,
+  anchorRef,
   onClose,
   children,
   className,
@@ -47,7 +49,9 @@ export default function Popover({
   });
 
   useLayoutEffect(() => {
-    if (!open || !anchorEl) return;
+    if (!open) return;
+    const anchorEl = anchorRef.current;
+    if (!anchorEl) return;
     const compute = () => {
       const rect = anchorEl.getBoundingClientRect();
       const popEl = popoverRef.current;
@@ -72,13 +76,11 @@ export default function Popover({
         const right = Math.max(8, vpW - rect.right);
         base.right = right;
       } else {
-        // clamp left to stay in viewport
         const left = Math.min(Math.max(8, rect.left), vpW - popW - 8);
         base.left = left;
       }
       setStyle(base);
     };
-    // 两阶段：首次渲染用初始（隐藏）样式获得真实尺寸 → 再次 compute
     compute();
     const raf = requestAnimationFrame(compute);
     window.addEventListener('resize', compute);
@@ -88,7 +90,7 @@ export default function Popover({
       window.removeEventListener('resize', compute);
       window.removeEventListener('scroll', compute, true);
     };
-  }, [open, anchorEl, placement, gap, matchAnchorWidth]);
+  }, [open, anchorRef, placement, gap, matchAnchorWidth]);
 
   // 点击外部关闭
   useEffect(() => {
@@ -96,12 +98,12 @@ export default function Popover({
     const handler = (e: MouseEvent) => {
       const t = e.target as Node;
       if (popoverRef.current?.contains(t)) return;
-      if (anchorEl?.contains(t)) return;
+      if (anchorRef.current?.contains(t)) return;
       onClose();
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [open, anchorEl, onClose]);
+  }, [open, anchorRef, onClose]);
 
   // Esc 关闭
   useEffect(() => {

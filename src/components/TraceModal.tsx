@@ -133,6 +133,8 @@ export default function TraceModal({
       })
       .finally(() => { if (!cancelled) setTrendLoading(false); });
     return () => { cancelled = true; };
+    // trendFetchIdsKey 替代 trendFetchIds 做稳定比较
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trendExpanded, trendFetchIdsKey, data]);
 
   // ---- Parent map for locating spans ----

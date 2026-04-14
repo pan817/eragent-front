@@ -26,6 +26,8 @@ interface SidebarProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
   onOpenShortcuts?: () => void;
+  /** 正在跑任务的 sessionId 集合，用于列表项显示 loading 指示 */
+  busySessions?: Set<string>;
 }
 
 
@@ -47,6 +49,7 @@ export default function Sidebar({
   collapsed,
   onToggleCollapse,
   onOpenShortcuts,
+  busySessions,
 }: SidebarProps) {
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
@@ -275,6 +278,13 @@ export default function Sidebar({
                       className="sidebar-history-item-title"
                       title={isEmpty ? undefined : s.title}
                     >
+                      {busySessions?.has(s.id) && (
+                        <span
+                          className="sidebar-busy-dot"
+                          aria-label="正在分析"
+                          title="该会话有任务正在分析中"
+                        />
+                      )}
                       {isEmpty ? <span className="is-muted">新对话</span> : s.title}
                     </div>
                   )}

@@ -1,8 +1,15 @@
-import { useState, useEffect, useRef, memo, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, memo, lazy, Suspense } from 'react';
 import './MessageBubble.css';
-import type { ChatMessage } from '../types/api';
+import type { ChatMessage, AnalysisTimelineEntry } from '../types/api';
 import Avatar from './Avatar';
 import { formatRelativeTime } from '../utils/format';
+import { getTypicalDurationMs } from '../utils/analysisDurationHistory';
+
+/** 这些错误码重试只会再失败；不显示"重试"按钮，改为"换个问法"提示。 */
+const RETRY_FORBIDDEN_CODES = new Set(['INTENT_UNCLEAR', 'NO_DATA']);
+
+/** resumedAt 后横幅展示时长 */
+const RESUME_BANNER_DURATION_MS = 3000;
 
 const MarkdownContent = lazy(() => import('./MarkdownContent'));
 
@@ -13,33 +20,123 @@ interface Props {
   onRegenerate?: (id: string) => void;
 }
 
-const LOADING_STAGES = [
-  '🔍 正在理解你的问题...',
-  '📡 正在查询业务数据...',
-  '📊 正在计算指标与异常...',
-  '✍️ 正在生成分析报告...',
-];
+interface LoadingStagesProps {
+  stageText?: string;
+  timeline?: AnalysisTimelineEntry[];
+  degradedToPolling?: boolean;
+  resumedAt?: number;
+  startedAt: Date;
+}
 
-/** 每条 loading 阶段文字的展示时长（ms） */
-const LOADING_STAGE_INTERVAL = 1800;
+function LoadingStages({
+  stageText,
+  timeline,
+  degradedToPolling,
+  resumedAt,
+  startedAt,
+}: LoadingStagesProps) {
+  // 用户手动切换状态；U5: 第 1 条 timeline 到达时自动展开一次（user 手动收起后不再自动展）
+  const [expanded, setExpanded] = useState(false);
+  const autoExpandedRef = useRef(false);
 
-function LoadingStages() {
-  const [stageIdx, setStageIdx] = useState(0);
+  const timelineLength = timeline?.length ?? 0;
+  useEffect(() => {
+    if (!autoExpandedRef.current && timelineLength > 0) {
+      autoExpandedRef.current = true;
+      setExpanded(true);
+    }
+  }, [timelineLength]);
+
+  // 每秒刷新"已用时 Xs"；typical 只在挂载时读一次
+  const [elapsedSec, setElapsedSec] = useState(() =>
+    Math.floor((Date.now() - startedAt.getTime()) / 1000)
+  );
   useEffect(() => {
     const timer = setInterval(() => {
-      setStageIdx(i => (i + 1) % LOADING_STAGES.length);
-    }, LOADING_STAGE_INTERVAL);
+      setElapsedSec(Math.floor((Date.now() - startedAt.getTime()) / 1000));
+    }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [startedAt]);
+
+  const typicalDurationMs = useMemo(() => getTypicalDurationMs(), []);
+
+  // resumedAt 后 N 秒内展示"已恢复"横幅，之后淡出
+  const [showResumeBanner, setShowResumeBanner] = useState(!!resumedAt);
+  useEffect(() => {
+    if (!resumedAt) return;
+    setShowResumeBanner(true);
+    const timer = setTimeout(
+      () => setShowResumeBanner(false),
+      RESUME_BANNER_DURATION_MS
+    );
+    return () => clearTimeout(timer);
+  }, [resumedAt]);
+
+  // 主文案优先级：stageText > (degraded ? "网络不稳定..." : "分析中")
+  const mainText = stageText
+    ? stageText
+    : degradedToPolling
+      ? '网络不稳定，正在查询结果'
+      : '分析中';
+
+  const timeHint = (() => {
+    const parts: string[] = [`${elapsedSec}s`];
+    if (typicalDurationMs) {
+      parts.push(`通常 ${Math.round(typicalDurationMs / 1000)}s`);
+    }
+    return `(${parts.join(' / ')})`;
+  })();
+
+  const hasTimeline = timelineLength > 0;
 
   return (
     <div className="loading">
-      <div className="loading-dots">
-        <span /><span /><span />
+      {showResumeBanner && (
+        <div className="loading-resume-banner" role="status">
+          ↻ 已恢复上次未完成的分析
+        </div>
+      )}
+      <div className="loading-header">
+        <div className="loading-dots">
+          <span /><span /><span />
+        </div>
+        <span className="loading-text" key={mainText}>{mainText}</span>
+        <span className="loading-time-hint">{timeHint}</span>
+        {hasTimeline && (
+          <button
+            type="button"
+            className="loading-toggle"
+            onClick={() => setExpanded(v => !v)}
+            aria-expanded={expanded}
+            aria-label={expanded ? '收起分析步骤' : '展开分析步骤'}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        )}
       </div>
-      <span className="loading-text" key={stageIdx}>{LOADING_STAGES[stageIdx]}</span>
+      {hasTimeline && expanded && (
+        <ul className="loading-timeline">
+          {timeline!.map((entry, idx) => (
+            <li key={idx} className="loading-timeline-item">
+              <span className="loading-timeline-ts">{formatTsHms(entry.ts)}</span>
+              <span className="loading-timeline-text">{entry.text}</span>
+              {entry.durationMs !== undefined && (
+                <span className="loading-timeline-duration">{(entry.durationMs / 1000).toFixed(1)}s</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
+}
+
+function formatTsHms(ts: string): string {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts;
+  return d.toLocaleTimeString('zh-CN', { hour12: false });
 }
 
 function stripMarkdown(md: string): string {
@@ -60,23 +157,13 @@ function stripMarkdown(md: string): string {
 function MessageBubble({ message, userId, onTraceClick, onRegenerate }: Props) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState<'md' | 'text' | false>(false);
-  const [retrying, setRetrying] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  const prevStatus = useRef(message.status);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exportRef = useRef<HTMLDivElement>(null);
 
-  // 当 status 从非 sending 变为 sending（重试触发），显示 retrying 态
-  // 当 status 离开 sending（请求完成），清除 retrying 态
-  useEffect(() => {
-    if (prevStatus.current !== 'sending' && message.status === 'sending') {
-      setRetrying(true);
-    }
-    if (prevStatus.current === 'sending' && message.status !== 'sending') {
-      setRetrying(false);
-    }
-    prevStatus.current = message.status;
-  }, [message.status]);
+  // U4: 某些错误码重试只会再失败（意图不清 / 无数据），改为提示"换个问法"
+  const retryForbidden =
+    !!message.errorCode && RETRY_FORBIDDEN_CODES.has(message.errorCode);
 
   // 清理 copy 计时器，避免卸载后 setState
   useEffect(() => {
@@ -153,7 +240,13 @@ h1,h2,h3{margin-top:24px;margin-bottom:8px}
           {isUser ? (
             <p className="user-text">{message.content}</p>
           ) : message.status === 'sending' ? (
-            <LoadingStages />
+            <LoadingStages
+              stageText={message.stageText}
+              timeline={message.timeline}
+              degradedToPolling={message.degradedToPolling}
+              resumedAt={message.resumedAt}
+              startedAt={message.timestamp}
+            />
           ) : message.status === 'error' ? (
             <div className="error-block">
               <div className="error-block-content">
@@ -164,31 +257,30 @@ h1,h2,h3{margin-top:24px;margin-bottom:8px}
                 </svg>
                 <span>{message.content}</span>
               </div>
-              <div className="error-block-hint">请稍后重试，或检查网络连接</div>
-              {onRegenerate && (
+              <div className="error-block-hint">
+                {retryForbidden
+                  ? '这类问题重试也会得到相同结果，请尝试换一个问法'
+                  : '请稍后重试，或检查网络连接'}
+              </div>
+              {onRegenerate && !retryForbidden && (
                 <div className="error-block-actions">
                   <span className="error-block-time">{formatRelativeTime(message.timestamp)}</span>
                   <button
                     type="button"
                     className="error-block-retry"
                     onClick={() => onRegenerate(message.id)}
-                    disabled={retrying}
                   >
-                    {retrying ? (
-                      <>
-                        <span className="error-retry-spinner" />
-                        重试中...
-                      </>
-                    ) : (
-                      <>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-9-9 9 9 0 0 1 9-9c2.5 0 4.8 1 6.5 2.6L21 8" />
-                          <path d="M21 3v5h-5" />
-                        </svg>
-                        点击重试
-                      </>
-                    )}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-9-9 9 9 0 0 1 9-9c2.5 0 4.8 1 6.5 2.6L21 8" />
+                      <path d="M21 3v5h-5" />
+                    </svg>
+                    点击重试
                   </button>
+                </div>
+              )}
+              {retryForbidden && (
+                <div className="error-block-actions">
+                  <span className="error-block-time">{formatRelativeTime(message.timestamp)}</span>
                 </div>
               )}
             </div>

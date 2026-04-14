@@ -56,29 +56,36 @@ describe('MessageBubble — assistant message', () => {
     expect(await screen.findByTestId('markdown-content')).toHaveTextContent('# Report')
   })
 
-  it('renders loading stages for sending status', () => {
+  it('renders honest loading text for sending status (U1)', () => {
     const msg = makeMsg({ status: 'sending', content: '' })
     render(<MessageBubble message={msg} />)
 
-    expect(screen.getByText('🔍 正在理解你的问题...')).toBeInTheDocument()
+    // U1: 不再轮播假阶段，展示诚实的"分析中"
+    expect(screen.getByText('分析中')).toBeInTheDocument()
   })
 
-  it('cycles through loading stages', () => {
-    vi.useFakeTimers()
-    const msg = makeMsg({ status: 'sending', content: '' })
+  it('uses real stageText when available', () => {
+    const msg = makeMsg({ status: 'sending', content: '', stageText: '正在查询采购订单' })
     render(<MessageBubble message={msg} />)
 
-    expect(screen.getByText('🔍 正在理解你的问题...')).toBeInTheDocument()
+    expect(screen.getByText('正在查询采购订单')).toBeInTheDocument()
+    expect(screen.queryByText('分析中')).not.toBeInTheDocument()
+  })
 
-    act(() => {
-      vi.advanceTimersByTime(1800)
-    })
-    expect(screen.getByText('📡 正在查询业务数据...')).toBeInTheDocument()
+  it('elapsed seconds update every second (U6)', () => {
+    vi.useFakeTimers()
+    const startedAt = new Date()
+    const msg = makeMsg({ status: 'sending', content: '', timestamp: startedAt })
+    render(<MessageBubble message={msg} />)
 
-    act(() => {
-      vi.advanceTimersByTime(1800)
-    })
-    expect(screen.getByText('📊 正在计算指标与异常...')).toBeInTheDocument()
+    // 初始 0s
+    expect(screen.getByText(/\(0s\)/)).toBeInTheDocument()
+
+    act(() => { vi.advanceTimersByTime(1000) })
+    expect(screen.getByText(/\(1s\)/)).toBeInTheDocument()
+
+    act(() => { vi.advanceTimersByTime(2000) })
+    expect(screen.getByText(/\(3s\)/)).toBeInTheDocument()
 
     vi.useRealTimers()
   })
@@ -193,18 +200,55 @@ describe('MessageBubble — copy functionality', () => {
 })
 
 describe('MessageBubble — retrying state', () => {
-  it('shows loading stages when status changes from error to sending (regenerate)', () => {
+  it('shows loading UI when status changes from error to sending (regenerate)', () => {
     const msg = makeMsg({ status: 'error', content: '失败' })
     const onRegenerate = vi.fn()
     const { rerender } = render(<MessageBubble message={msg} onRegenerate={onRegenerate} />)
 
     expect(screen.getByText('点击重试')).toBeInTheDocument()
 
-    // Status changes to sending (regenerate triggered) — shows loading stages
+    // Status changes to sending (regenerate triggered) — shows loading UI
     const retryingMsg = makeMsg({ status: 'sending', content: '' })
     rerender(<MessageBubble message={retryingMsg} onRegenerate={onRegenerate} />)
 
-    expect(screen.getByText('🔍 正在理解你的问题...')).toBeInTheDocument()
+    expect(screen.getByText('分析中')).toBeInTheDocument()
     expect(screen.queryByText('点击重试')).not.toBeInTheDocument()
+  })
+
+  it('U4: retry button hidden for INTENT_UNCLEAR errors', () => {
+    const msg = makeMsg({
+      status: 'error',
+      content: '未能理解你的问题',
+      errorCode: 'INTENT_UNCLEAR',
+    })
+    const onRegenerate = vi.fn()
+    render(<MessageBubble message={msg} onRegenerate={onRegenerate} />)
+
+    expect(screen.queryByText('点击重试')).not.toBeInTheDocument()
+    expect(
+      screen.getByText('这类问题重试也会得到相同结果，请尝试换一个问法')
+    ).toBeInTheDocument()
+  })
+
+  it('U3: degraded-to-polling shows dedicated text', () => {
+    const msg = makeMsg({
+      status: 'sending',
+      content: '',
+      degradedToPolling: true,
+    })
+    render(<MessageBubble message={msg} />)
+
+    expect(screen.getByText('网络不稳定，正在查询结果')).toBeInTheDocument()
+  })
+
+  it('U2: resumedAt shows resume banner', () => {
+    const msg = makeMsg({
+      status: 'sending',
+      content: '',
+      resumedAt: Date.now(),
+    })
+    render(<MessageBubble message={msg} />)
+
+    expect(screen.getByText(/已恢复上次未完成的分析/)).toBeInTheDocument()
   })
 })

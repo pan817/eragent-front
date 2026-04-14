@@ -3,8 +3,16 @@ import { useMessageSending } from './useMessageSending'
 import type { ChatMessage } from '../types/api'
 import { resetToasts, subscribeToasts, type ToastItem } from '../utils/toast'
 
+vi.mock('../services/constants', async () => {
+  const actual = await vi.importActual<typeof import('../services/constants')>('../services/constants')
+  return { ...actual, USE_ASYNC_ANALYZE: false }
+})
+
 vi.mock('../services/api', () => ({
   analyzeQuery: vi.fn(),
+  submitAnalyzeAsync: vi.fn(),
+  fetchTaskSnapshot: vi.fn(),
+  taskEventStreamUrl: (tid: string) => `/stream/${tid}`,
 }))
 
 import { analyzeQuery } from '../services/api'

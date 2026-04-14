@@ -63,7 +63,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
     setShowLogin(true);
   }, []);
 
-  const { loading, handleSend, handleRegenerate, busyTip } = useMessageSending({
+  const { loading, handleSend, handleRegenerate, busyTip, busySessions } = useMessageSending({
     userId,
     sessionId: currentId,
     messages,
@@ -208,6 +208,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(v => !v)}
         onOpenShortcuts={() => setShortcutsOpen(true)}
+        busySessions={busySessions}
       />
 
       <main className="main-pane">

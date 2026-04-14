@@ -27,33 +27,45 @@ describe('MarkdownContent', () => {
   })
 
   it('wraps tables in table-wrapper div', () => {
-    render(<MarkdownContent content="| A | B |\n|---|---|\n| 1 | 2 |" />)
+    const tableContent = `| A | B |
+|---|---|
+| 1 | 2 |`
+    render(<MarkdownContent content={tableContent} />)
     const wrapper = document.querySelector('.table-wrapper')
     expect(wrapper).toBeInTheDocument()
     expect(wrapper?.querySelector('table')).toBeInTheDocument()
   })
 
   it('renders severity badges in table cells', () => {
-    render(<MarkdownContent content="| Status |\n|---|\n| HIGH |" />)
+    const tableContent = `| Status |
+|---|
+| HIGH |`
+    render(<MarkdownContent content={tableContent} />)
     const badge = document.querySelector('.severity-badge.severity-high')
     expect(badge).toBeInTheDocument()
     expect(badge?.textContent).toBe('HIGH')
   })
 
   it('renders multiple severity levels', () => {
-    render(<MarkdownContent content="| A | B | C |\n|---|---|---|\n| LOW | MEDIUM | CRITICAL |" />)
+    const tableContent = `| A | B | C |
+|---|---|---|
+| LOW | MEDIUM | CRITICAL |`
+    render(<MarkdownContent content={tableContent} />)
     expect(document.querySelector('.severity-low')).toBeInTheDocument()
     expect(document.querySelector('.severity-medium')).toBeInTheDocument()
     expect(document.querySelector('.severity-critical')).toBeInTheDocument()
   })
 
-  it('renders GFM features like strikethrough', () => {
+  it('renders GFM strikethrough', () => {
     render(<MarkdownContent content="~~deleted~~" />)
     expect(screen.getByText('deleted').tagName).toBe('DEL')
   })
 
   it('renders code blocks', () => {
-    render(<MarkdownContent content="```\ncode here\n```" />)
+    const codeContent = `\`\`\`
+code here
+\`\`\``
+    render(<MarkdownContent content={codeContent} />)
     expect(screen.getByText('code here')).toBeInTheDocument()
   })
 

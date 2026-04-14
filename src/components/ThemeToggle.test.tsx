@@ -10,6 +10,11 @@ Object.defineProperty(window, 'localStorage', {
   writable: true,
 })
 
+Object.defineProperty(window, 'matchMedia', {
+  value: vi.fn(() => ({ matches: false })),
+  writable: true,
+})
+
 import ThemeToggle from './ThemeToggle'
 
 beforeEach(() => {
@@ -37,7 +42,7 @@ describe('ThemeToggle', () => {
 
     expect(screen.getByTitle('切换到浅色模式')).toBeInTheDocument()
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
-    expect(localStorageMock['theme']).toBe('dark')
+    expect(store['theme']).toBe('dark')
   })
 
   it('toggles back to light on second click', () => {

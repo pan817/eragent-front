@@ -282,6 +282,22 @@
   font-style: italic;
 }
 
+.sidebar-busy-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  background: var(--brand-500);
+  border-radius: 50%;
+  vertical-align: middle;
+  animation: sidebar-busy-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes sidebar-busy-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
 .sidebar-history-item-meta {
   font-size: 10px;
   color: var(--text-subtle);

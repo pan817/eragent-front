@@ -108,6 +108,23 @@ export interface ChatMessage {
   status?: 'sending' | 'success' | 'error';
   durationMs?: number;
   traceId?: string;
+  /** 异步分析进行中，气泡内展示的当前阶段人话文案（由 stage/tool 事件驱动）。完成后丢弃。 */
+  stageText?: string;
+  /** 异步分析进行中，折叠时间线展示的事件条目（仅进行中可见，完成即丢）。 */
+  timeline?: AnalysisTimelineEntry[];
+  /** 异步流已降级为轮询（SSE 不工作或长期无业务事件）。UI 用于透明告知用户。 */
+  degradedToPolling?: boolean;
+  /** 刷新/切回 session 后恢复订阅的时间戳。气泡会显示"已恢复"横幅，N 秒后自动隐藏。 */
+  resumedAt?: number;
+  /** 失败时的错误码（TIMEOUT / INTENT_UNCLEAR 等）；决定是否展示重试按钮。 */
+  errorCode?: string;
+}
+
+/** 气泡折叠时间线里的一行（只保留 stage 和 tool 事件，heartbeat 忽略） */
+export interface AnalysisTimelineEntry {
+  ts: string;
+  text: string;
+  durationMs?: number;
 }
 
 // ============================================
@@ -121,7 +138,8 @@ export interface ApiChatMessage {
   session_id: string;
   role: 'user' | 'assistant';
   content: string;
-  status: 'sending' | 'success' | 'error';
+  /** pending 仅在异步接口未完成时出现（文档 §6.2）；前端会在 fromApiMessage 映射为 sending */
+  status: 'sending' | 'success' | 'error' | 'pending';
   duration_ms: number | null;
   trace_id: string | null;
   created_at: string;
@@ -216,7 +234,7 @@ export function fromApiMessage(m: ApiChatMessage): ChatMessage {
       ? '该回复内容为空。'
       : (m.content || ''),
     timestamp: new Date(m.created_at),
-    status: m.status,
+    status: m.status === 'pending' ? 'sending' : m.status,
     durationMs: m.duration_ms ?? undefined,
     traceId: m.trace_id ?? undefined,
   };
@@ -232,6 +250,96 @@ export interface FrontendSession {
   updatedAt: number;
   messages: ChatMessage[]; // 懒加载：列表接口不返回，详情接口才填充
 }
+
+// ============================================
+// 异步分析接口类型（docs/async_analyze_frontend.md）
+// ============================================
+
+export type AnalysisTaskStatus = 'queued' | 'running' | 'ok' | 'error' | 'aborted';
+
+export interface AnalysisTaskAck {
+  trace_id: string;
+  status: 'queued' | 'running';
+  session_id: string;
+  user_message_id?: string;
+  assistant_message_id?: string;
+  poll_url: string;
+  stream_url: string;
+  created_at: string;
+}
+
+export interface AnalysisTaskError {
+  code: string;
+  message: string;
+}
+
+export interface TaskSnapshot {
+  trace_id: string;
+  status: AnalysisTaskStatus;
+  session_id: string;
+  user_id: string;
+  created_at: string;
+  started_at?: string;
+  finished_at?: string;
+  duration_ms?: number;
+  stage?: string;
+  result?: AnalyzeResponse;
+  error?: AnalysisTaskError;
+}
+
+interface BaseEvent {
+  trace_id: string;
+  ts: string;
+  seq: number;
+}
+
+export interface StatusEvent extends BaseEvent {
+  type: 'status';
+  state: AnalysisTaskStatus;
+}
+export interface StageEvent extends BaseEvent {
+  type: 'stage';
+  name: string;
+  attrs?: Record<string, unknown>;
+}
+export interface ToolEvent extends BaseEvent {
+  type: 'tool';
+  action: 'start' | 'end';
+  name: string;
+  duration_ms?: number;
+  status?: string;
+}
+export interface DagTaskEvent extends BaseEvent {
+  type: 'dag_task';
+  action: 'start' | 'end';
+  task_name: string;
+  duration_ms?: number;
+  status?: string;
+}
+export interface ReportEvent extends BaseEvent {
+  type: 'report';
+  anomaly_count: number;
+  duration_ms: number;
+}
+export interface HeartbeatEvent extends BaseEvent {
+  type: 'heartbeat';
+}
+export interface DoneEvent extends BaseEvent {
+  type: 'done';
+  status: 'ok' | 'error' | 'aborted';
+  duration_ms: number;
+  anomaly_count?: number;
+  error?: AnalysisTaskError;
+}
+
+export type AnalysisTaskEvent =
+  | StatusEvent
+  | StageEvent
+  | ToolEvent
+  | DagTaskEvent
+  | ReportEvent
+  | HeartbeatEvent
+  | DoneEvent;
 
 export function fromApiSession(
   s: ApiChatSession,

@@ -57,3 +57,32 @@ export async function getTrace(traceId: string): Promise<TraceResponse> {
 
   return response.json();
 }
+
+const traceCache = new Map<string, TraceResponse>();
+const traceInflight = new Map<string, Promise<TraceResponse>>();
+
+export function getTraceCached(traceId: string): Promise<TraceResponse> {
+  const cached = traceCache.get(traceId);
+  if (cached) return Promise.resolve(cached);
+  const inflight = traceInflight.get(traceId);
+  if (inflight) return inflight;
+  const p = getTrace(traceId)
+    .then(res => {
+      traceCache.set(traceId, res);
+      return res;
+    })
+    .finally(() => {
+      traceInflight.delete(traceId);
+    });
+  traceInflight.set(traceId, p);
+  return p;
+}
+
+export function primeTraceCache(traceId: string, data: TraceResponse): void {
+  traceCache.set(traceId, data);
+}
+
+export function clearTraceCache(): void {
+  traceCache.clear();
+  traceInflight.clear();
+}

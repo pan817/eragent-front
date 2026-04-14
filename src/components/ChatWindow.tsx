@@ -108,6 +108,14 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
     return '';
   }, [loading, messages]);
 
+  const sessionTraceIds = useMemo(
+    () =>
+      messages
+        .filter(m => m.role === 'assistant' && m.traceId)
+        .map(m => m.traceId!),
+    [messages]
+  );
+
   const lastDurationMs = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
@@ -278,9 +286,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
           <TraceModal
             traceId={activeTraceId}
             onClose={() => setActiveTraceId(null)}
-            sessionTraceIds={messages
-              .filter(m => m.role === 'assistant' && m.traceId)
-              .map(m => m.traceId!)}
+            sessionTraceIds={sessionTraceIds}
           />
         </Suspense>
       )}

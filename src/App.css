@@ -1880,6 +1880,37 @@ code.gantt-detail-value {
   border-bottom: 1px solid var(--border);
 }
 
+.token-section-title--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.token-section-title--row .link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent, #6366f1);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.token-section-title--row .link-btn:hover {
+  text-decoration: underline;
+}
+
+.modal-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-subtle);
+  font-size: 13px;
+}
+
 .token-analysis-body {
   display: flex;
   flex-wrap: wrap;

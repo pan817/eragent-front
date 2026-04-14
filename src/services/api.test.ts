@@ -1,4 +1,11 @@
-import { analyzeQuery, initData, getTrace } from './api'
+import {
+  analyzeQuery,
+  initData,
+  getTrace,
+  getTraceCached,
+  clearTraceCache,
+  primeTraceCache,
+} from './api'
 import { ApiError } from '../types/api'
 
 // Mock fetch globally
@@ -106,5 +113,72 @@ describe('getTrace', () => {
     await expect(getTrace('missing')).rejects.toMatchObject({
       status: 404,
     })
+  })
+})
+
+describe('getTraceCached', () => {
+  beforeEach(() => {
+    clearTraceCache()
+  })
+
+  it('fetches once and serves subsequent calls from cache', async () => {
+    const mockTrace = { trace_id: 'tr-cached', spans: [] }
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockTrace),
+    })
+
+    const a = await getTraceCached('tr-cached')
+    const b = await getTraceCached('tr-cached')
+    expect(a).toEqual(mockTrace)
+    expect(b).toEqual(mockTrace)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('dedupes concurrent in-flight requests', async () => {
+    const mockTrace = { trace_id: 'tr-inflight', spans: [] }
+    let resolveFetch!: (v: unknown) => void
+    mockFetch.mockReturnValue(
+      new Promise(res => {
+        resolveFetch = res
+      }),
+    )
+
+    const p1 = getTraceCached('tr-inflight')
+    const p2 = getTraceCached('tr-inflight')
+    const p3 = getTraceCached('tr-inflight')
+
+    // All three should share the same underlying fetch
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+
+    resolveFetch({ ok: true, json: () => Promise.resolve(mockTrace) })
+    const [a, b, c] = await Promise.all([p1, p2, p3])
+    expect(a).toEqual(mockTrace)
+    expect(b).toEqual(mockTrace)
+    expect(c).toEqual(mockTrace)
+  })
+
+  it('retries after a failure (inflight map cleared)', async () => {
+    mockFetch.mockRejectedValueOnce(new TypeError('network'))
+    await expect(getTraceCached('tr-fail')).rejects.toThrow()
+
+    const mockTrace = { trace_id: 'tr-fail', spans: [] }
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockTrace),
+    })
+    const result = await getTraceCached('tr-fail')
+    expect(result).toEqual(mockTrace)
+    // 两次独立的 fetch
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('primeTraceCache skips fetch entirely', async () => {
+    const preloaded = { trace_id: 'tr-preload', spans: [] }
+    // @ts-expect-error narrow test fixture
+    primeTraceCache('tr-preload', preloaded)
+    const result = await getTraceCached('tr-preload')
+    expect(result).toBe(preloaded)
+    expect(mockFetch).not.toHaveBeenCalled()
   })
 })

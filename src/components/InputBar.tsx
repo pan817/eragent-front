@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import SlashCommandPanel, { getFilteredPrompts } from './SlashCommandPanel';
+import Popover from './Popover';
 import type { ExamplePrompt } from '../data/examplePrompts';
 import { formatMs } from '../utils/format';
 import './InputBar.css';
@@ -220,24 +221,7 @@ export default function InputBar({
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // 点击外部关闭下拉菜单
-  useEffect(() => {
-    if (!roleMenuOpen && !outputMenuOpen && !timeMenuOpen) return;
-    const handler = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (roleMenuOpen && roleMenuRef.current && !roleMenuRef.current.contains(t)) {
-        setRoleMenuOpen(false);
-      }
-      if (outputMenuOpen && outputMenuRef.current && !outputMenuRef.current.contains(t)) {
-        setOutputMenuOpen(false);
-      }
-      if (timeMenuOpen && timeMenuRef.current && !timeMenuRef.current.contains(t)) {
-        setTimeMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [roleMenuOpen, outputMenuOpen, timeMenuOpen]);
+  // 外部点击 / Esc 关闭由 Popover 内部处理
 
   const currentRole = useMemo(
     () => ROLES.find(r => r.key === options.role) ?? ROLES[0],
@@ -402,8 +386,13 @@ export default function InputBar({
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
               </button>
-              {roleMenuOpen && (
-                <div className="input-role-menu" role="listbox">
+              <Popover
+                open={roleMenuOpen}
+                anchorEl={roleMenuRef.current}
+                onClose={() => setRoleMenuOpen(false)}
+                className="input-role-menu"
+              >
+                <div role="listbox">
                   {ROLES.map(r => (
                     <button
                       key={r.key}
@@ -429,7 +418,7 @@ export default function InputBar({
                     </button>
                   ))}
                 </div>
-              )}
+              </Popover>
             </div>
 
             <div className="input-role" ref={outputMenuRef}>
@@ -456,8 +445,13 @@ export default function InputBar({
                 </span>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
               </button>
-              {outputMenuOpen && (
-                <div className="input-role-menu" role="listbox">
+              <Popover
+                open={outputMenuOpen}
+                anchorEl={outputMenuRef.current}
+                onClose={() => setOutputMenuOpen(false)}
+                className="input-role-menu"
+              >
+                <div role="listbox">
                   {OUTPUT_MODES.map(m => (
                     <button
                       key={m.key}
@@ -482,7 +476,7 @@ export default function InputBar({
                     </button>
                   ))}
                 </div>
-              )}
+              </Popover>
             </div>
 
             <div className="input-role" ref={timeMenuRef}>
@@ -507,8 +501,13 @@ export default function InputBar({
                 </span>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
               </button>
-              {timeMenuOpen && (
-                <div className="input-role-menu" role="listbox">
+              <Popover
+                open={timeMenuOpen}
+                anchorEl={timeMenuRef.current}
+                onClose={() => setTimeMenuOpen(false)}
+                className="input-role-menu"
+              >
+                <div role="listbox">
                   {TIME_RANGES.map(t => (
                     <button
                       key={t.key}
@@ -532,7 +531,7 @@ export default function InputBar({
                     </button>
                   ))}
                 </div>
-              )}
+              </Popover>
             </div>
 
           </div>

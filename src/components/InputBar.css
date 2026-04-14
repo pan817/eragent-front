@@ -67,17 +67,14 @@
   font-weight: 600;
 }
 
+/* Popover 通过 createPortal + position:fixed 渲染，位置由 JS 计算 */
 .input-role-menu {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
   min-width: 240px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-lg);
   padding: 4px;
-  z-index: 50;
   animation: roleMenuIn var(--dur-fast) var(--ease-out);
 }
 

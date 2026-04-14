@@ -1,36 +1,42 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import ChatWindow from './components/ChatWindow'
 import ErrorBoundary from './components/ErrorBoundary'
+import ToastHost from './components/ToastHost'
+import { safeGetItem, safeSetItem, safeRemoveItem } from './utils/safeStorage'
+import { showToast } from './utils/toast'
+import { ApiError } from './types/api'
 import './App.css'
 
 const USER_ID_KEY = 'eragent_user_id'
 
 function App() {
-  const [userId, setUserId] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(USER_ID_KEY)
-    } catch {
-      return null
-    }
-  })
+  const [userId, setUserId] = useState<string | null>(() => safeGetItem(USER_ID_KEY))
 
   const handleLogin = (name: string) => {
-    try {
-      localStorage.setItem(USER_ID_KEY, name)
-    } catch {
-      // ignore storage failures
-    }
+    safeSetItem(USER_ID_KEY, name)
     setUserId(name)
   }
 
   const handleLogout = () => {
-    try {
-      localStorage.removeItem(USER_ID_KEY)
-    } catch {
-      // ignore storage failures
-    }
+    safeRemoveItem(USER_ID_KEY)
     setUserId(null)
   }
+
+  // 全局未捕获的 Promise 拒绝：弹 toast，便于调试也避免静默吞掉
+  useEffect(() => {
+    const handler = (e: PromiseRejectionEvent) => {
+      const reason = e.reason
+      if (reason instanceof ApiError) {
+        showToast(reason.message, { level: reason.isNetworkError() ? 'warn' : 'error' })
+      } else if (reason instanceof Error) {
+        showToast(`未处理的错误：${reason.message}`, { level: 'error' })
+      } else {
+        showToast('发生未知错误', { level: 'error' })
+      }
+    }
+    window.addEventListener('unhandledrejection', handler)
+    return () => window.removeEventListener('unhandledrejection', handler)
+  }, [])
 
   return (
     <ErrorBoundary>
@@ -39,6 +45,7 @@ function App() {
         onLogin={handleLogin}
         onLogout={handleLogout}
       />
+      <ToastHost />
     </ErrorBoundary>
   )
 }

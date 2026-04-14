@@ -182,6 +182,14 @@ export interface ApiErrorBody {
   };
 }
 
+/** 前端已知错误码常量。后端返回的其他 code 原样保留在 ApiError.code。 */
+export const ApiErrorCode = {
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  TIMEOUT: 'TIMEOUT',
+  /** 生成 HTTP 状态码形式的 code，如 HTTP_500 */
+  http: (status: number) => `HTTP_${status}`,
+} as const;
+
 export class ApiError extends Error {
   code: string;
   status: number;
@@ -191,6 +199,10 @@ export class ApiError extends Error {
     this.status = status;
     this.code = code;
     this.details = details;
+  }
+  /** 网络/超时等非业务错误（status=0）归为"连接类"，UI 层可据此给出统一提示 */
+  isNetworkError(): boolean {
+    return this.status === 0;
   }
 }
 

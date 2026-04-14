@@ -1498,7 +1498,12 @@
   left: 7px;
   top: 0;
   bottom: 0;
-  border-left: 1px solid var(--border-strong);
+  border-left: 1px dashed var(--border-strong);
+}
+
+[data-theme='dark'] .tree-indent.has-line::before {
+  border-left-color: #475569;
+  opacity: 0.85;
 }
 
 .tree-chevron {

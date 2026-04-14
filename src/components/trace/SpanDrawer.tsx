@@ -10,7 +10,12 @@ export default function SpanDrawer({ span, onClose }: Props) {
   return (
     <>
       <div className="span-drawer-backdrop" onClick={onClose} />
-      <aside className="span-drawer" role="dialog" aria-modal="true">
+      <aside
+        className="span-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="span-drawer-title"
+      >
         <div className="span-drawer-header">
           <div className="span-drawer-title">
             <span
@@ -19,7 +24,7 @@ export default function SpanDrawer({ span, onClose }: Props) {
             >
               {span.span_type}
             </span>
-            <span className="span-drawer-name" title={span.name}>
+            <span id="span-drawer-title" className="span-drawer-name" title={span.name}>
               {span.name}
             </span>
           </div>

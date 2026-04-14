@@ -33,6 +33,8 @@ export default function TraceModal({
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [flashedId, setFlashedId] = useState<string | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const preSpanFocusRef = useRef<HTMLElement | null>(null);
+  const lastSelectedIdRef = useRef<string | null>(null);
 
   // ---- Keyboard ----
   useEffect(() => {
@@ -168,8 +170,33 @@ export default function TraceModal({
   };
 
   const toggleDetail = (id: string) => {
-    setSelectedSpanId(prev => (prev === id ? null : id));
+    setSelectedSpanId(prev => {
+      if (prev === id) return null;
+      // 记录打开 Drawer 时的触发元素，关闭后用于焦点回迁
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) preSpanFocusRef.current = active;
+      lastSelectedIdRef.current = id;
+      return id;
+    });
   };
+
+  // Drawer 从打开 → 关闭时，把焦点还给触发行（或原触发元素）
+  useEffect(() => {
+    if (selectedSpanId) return;
+    const lastId = lastSelectedIdRef.current;
+    const prevFocus = preSpanFocusRef.current;
+    preSpanFocusRef.current = null;
+    lastSelectedIdRef.current = null;
+    if (!prevFocus && !lastId) return;
+    requestAnimationFrame(() => {
+      if (prevFocus && document.contains(prevFocus)) {
+        prevFocus.focus();
+        return;
+      }
+      const row = lastId ? rowRefs.current.get(lastId) : null;
+      row?.focus();
+    });
+  }, [selectedSpanId]);
 
   const selectedSpan = useMemo(() => {
     if (!selectedSpanId || !data) return null;

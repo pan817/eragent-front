@@ -49,11 +49,11 @@ describe('MessageBubble — user message', () => {
 })
 
 describe('MessageBubble — assistant message', () => {
-  it('renders markdown content for success status', () => {
+  it('renders markdown content for success status', async () => {
     const msg = makeMsg({ content: '# Report' })
     render(<MessageBubble message={msg} />)
 
-    expect(screen.getByTestId('markdown-content')).toHaveTextContent('# Report')
+    expect(await screen.findByTestId('markdown-content')).toHaveTextContent('# Report')
   })
 
   it('renders loading stages for sending status', () => {

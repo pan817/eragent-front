@@ -1,6 +1,6 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 
 interface Props {
   content: string;
@@ -37,7 +37,7 @@ function transformChildren(children: ReactNode): ReactNode {
   return children;
 }
 
-export default function MarkdownContent({ content }: Props) {
+function MarkdownContent({ content }: Props) {
   return (
     <div className="markdown-body">
       <ReactMarkdown
@@ -62,3 +62,5 @@ export default function MarkdownContent({ content }: Props) {
     </div>
   );
 }
+
+export default memo(MarkdownContent);

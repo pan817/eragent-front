@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo, lazy, Suspense } from 'react';
 import './MessageBubble.css';
 import type { ChatMessage } from '../types/api';
-import MarkdownContent from './MarkdownContent';
 import Avatar from './Avatar';
 import { formatRelativeTime } from '../utils/format';
+
+const MarkdownContent = lazy(() => import('./MarkdownContent'));
 
 interface Props {
   message: ChatMessage;
@@ -56,7 +57,7 @@ function stripMarkdown(md: string): string {
     .trim();
 }
 
-export default function MessageBubble({ message, userId, onTraceClick, onRegenerate }: Props) {
+function MessageBubble({ message, userId, onTraceClick, onRegenerate }: Props) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState<'md' | 'text' | false>(false);
   const [retrying, setRetrying] = useState(false);
@@ -192,7 +193,9 @@ h1,h2,h3{margin-top:24px;margin-bottom:8px}
               )}
             </div>
           ) : (
-            <MarkdownContent content={message.content} />
+            <Suspense fallback={<div className="markdown-body markdown-body--loading" aria-hidden="true" />}>
+              <MarkdownContent content={message.content} />
+            </Suspense>
           )}
         </div>
 
@@ -300,3 +303,5 @@ h1,h2,h3{margin-top:24px;margin-bottom:8px}
     </div>
   );
 }
+
+export default memo(MessageBubble);

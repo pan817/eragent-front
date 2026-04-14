@@ -124,7 +124,7 @@ describe('ChatWindow', () => {
     expect(screen.getByText('供应商绩效')).toBeInTheDocument()
   })
 
-  it('renders messages when they exist', () => {
+  it('renders messages when they exist', async () => {
     mockMessages = [
       { id: 'u-1', role: 'user', content: '分析订单', timestamp: new Date() },
       { id: 'a-1', role: 'assistant', content: '报告内容', timestamp: new Date(), status: 'success' },
@@ -133,7 +133,7 @@ describe('ChatWindow', () => {
     render(<ChatWindow {...defaultProps} />)
 
     expect(screen.getByText('分析订单')).toBeInTheDocument()
-    expect(screen.getByText('报告内容')).toBeInTheDocument()
+    expect(await screen.findByText('报告内容')).toBeInTheDocument()
     expect(screen.queryByText(/你好，我是你的 ERP 分析助手/)).not.toBeInTheDocument()
   })
 
@@ -255,5 +255,50 @@ describe('ChatWindow', () => {
 
     fireEvent.click(screen.getByText('新建对话').closest('button')!)
     expect(mockNewChat).toHaveBeenCalled()
+  })
+
+  it('shows empty live status when last message is user', () => {
+    mockMessages = [
+      { id: 'u-1', role: 'user', content: '问题', timestamp: new Date() },
+    ]
+    render(<ChatWindow {...defaultProps} />)
+
+    const liveRegion = document.querySelector('[aria-live="polite"]')
+    expect(liveRegion?.textContent).toBe('')
+  })
+
+  it('shows empty live status when no messages and not loading', () => {
+    render(<ChatWindow {...defaultProps} />)
+
+    const liveRegion = document.querySelector('[aria-live="polite"]')
+    expect(liveRegion?.textContent).toBe('')
+  })
+
+  it('does not show lastDurationMs when no assistant success messages', () => {
+    mockMessages = [
+      { id: 'u-1', role: 'user', content: '问题', timestamp: new Date() },
+    ]
+    render(<ChatWindow {...defaultProps} />)
+
+    expect(screen.queryByText(/上次/)).not.toBeInTheDocument()
+  })
+
+  it('handles login callback — shows and closes login dialog', () => {
+    const onLogin = vi.fn()
+    render(<ChatWindow {...defaultProps} userId={null} onLogin={onLogin} />)
+
+    // Open login
+    fireEvent.click(screen.getByText('登录'))
+    expect(screen.getByPlaceholderText('请输入用户名')).toBeInTheDocument()
+
+    // Close via cancel
+    fireEvent.click(screen.getByLabelText('关闭'))
+    expect(screen.queryByPlaceholderText('请输入用户名')).not.toBeInTheDocument()
+  })
+
+  it('renders sidebar collapse button', () => {
+    render(<ChatWindow {...defaultProps} />)
+
+    expect(screen.getByLabelText('收起侧边栏')).toBeInTheDocument()
   })
 })

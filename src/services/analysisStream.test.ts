@@ -455,4 +455,75 @@ describe('runAnalysisTask', () => {
     expect(delivered.status).toBe('error');
     expect(delivered.error?.code).toBe('LLM_ERROR');
   });
+
+  it('done: retries snapshot with status=ok but result=null (contract violation)', async () => {
+    // 后端契约要求 status=ok 必须带 result（docs/async_analyze_frontend.md §3.2）。
+    // 实测后端在 status 已翻 ok 之后仍有短时间 result=null，重试拿到完整数据后应用真实结果
+    const okNoResultSnap = {
+      trace_id: 't1',
+      status: 'ok',
+      session_id: 's1',
+      user_id: 'u1',
+      created_at: 'x',
+      started_at: 'x',
+      finished_at: 'y',
+      duration_ms: 15000,
+      stage: null,
+      result: null,
+      error: null,
+    };
+    const okSnap = mockSnapshotOk();
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(okNoResultSnap) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(okSnap) });
+
+    const h = makeHandlers();
+    runAnalysisTask('t1', h);
+    getLastEventSource()!.open();
+    getLastEventSource()!.emit('done', {
+      type: 'done', trace_id: 't1', ts: 'x', seq: 10,
+      status: 'ok', duration_ms: 15000,
+    });
+
+    await vi.advanceTimersByTimeAsync(1_100);
+
+    await vi.waitFor(() => expect(h.onDone).toHaveBeenCalled());
+    expect(h.onDone.mock.calls[0][0]).toEqual(okSnap);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('done: all snapshots return status=ok but result=null → fallback placeholder (not 分析失败)', async () => {
+    // 3 次都拿到 {status:ok, result:null} → 应走 fallback 显示占位
+    // 关键：不能让 applySnapshotToMessage 看到这种数据，否则会走失败分支显示"分析失败"
+    const okNoResultSnap = {
+      trace_id: 't1',
+      status: 'ok',
+      session_id: 's1',
+      user_id: 'u1',
+      created_at: 'x',
+      finished_at: 'y',
+      duration_ms: 15000,
+      result: null,
+      error: null,
+    };
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(okNoResultSnap) });
+
+    const h = makeHandlers();
+    runAnalysisTask('t1', h);
+    getLastEventSource()!.open();
+    getLastEventSource()!.emit('done', {
+      type: 'done', trace_id: 't1', ts: 'x', seq: 10,
+      status: 'ok', duration_ms: 15000,
+    });
+
+    await vi.advanceTimersByTimeAsync(3_500);
+
+    await vi.waitFor(() => expect(h.onDone).toHaveBeenCalled());
+    const delivered = h.onDone.mock.calls[0][0];
+    // 必须是 fallback 占位，而不是 result=null 直通
+    expect(delivered.status).toBe('ok');
+    expect(delivered.result).toBeTruthy();
+    expect(delivered.result?.report_markdown).toMatch(/分析已完成，但报告详情暂时无法加载/);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
 });

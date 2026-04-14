@@ -194,19 +194,32 @@ export function runAnalysisTask(
   };
 
   /**
-   * 拉快照直到拿到终态（ok / error / aborted）。
+   * 判断快照是否"可交付给 UI"。
    *
-   * 兜住后端已知问题：done 事件推出后 GET /analyze/tasks/{id} 仍短暂返回
-   * `{status: 'running', result: null}`。重试最多 3 次，每次间隔 1s。
-   * 超过后抛错，由调用方走 done 事件兜底构造占位。
+   * 契约（docs/async_analyze_frontend.md §3.2）：status=ok 必须带 result；
+   * status=error/aborted 允许无 error.code（错误状态自身即终态）。
    *
+   * 实测后端两种滞后：
+   *   A. status 还在 running/queued（docs/async_analyze_backend_issue.md Issue 2）
+   *   B. status 已是 ok 但 result 仍是 null
+   * 两种都不该立即交付，重试窗口内等后端补齐。
+   */
+  const isSnapshotReadyToDeliver = (snap: TaskSnapshot): boolean => {
+    if (snap.status === 'ok') return !!snap.result;
+    return SNAPSHOT_TERMINAL_STATUSES.has(snap.status);
+  };
+
+  /**
+   * 拉快照直到可交付（terminal status + 对应数据齐全）。
+   *
+   * 重试最多 3 次，每次间隔 1s。超过后抛错，由调用方走 done 事件兜底构造占位。
    * 任何一次网络失败直接抛（不在这里重试，交给调用方兜底）。
    */
   const fetchSnapshotUntilTerminal = async (): Promise<TaskSnapshot> => {
     for (let attempt = 0; attempt < SNAPSHOT_TERMINAL_MAX_ATTEMPTS; attempt++) {
       if (stopped) throw new Error('runAnalysisTask already stopped');
       const snap = await fetchTaskSnapshot(traceId);
-      if (SNAPSHOT_TERMINAL_STATUSES.has(snap.status)) return snap;
+      if (isSnapshotReadyToDeliver(snap)) return snap;
       if (attempt < SNAPSHOT_TERMINAL_MAX_ATTEMPTS - 1) {
         await new Promise<void>(resolve =>
           setTimeout(resolve, SNAPSHOT_TERMINAL_RETRY_DELAY_MS)
@@ -216,7 +229,7 @@ export function runAnalysisTask(
     throw new ApiError(
       0,
       ApiErrorCode.NETWORK_ERROR,
-      '后端快照接口未在预期时间内同步到任务终态'
+      '后端快照接口未在预期时间内同步完整数据'
     );
   };
 

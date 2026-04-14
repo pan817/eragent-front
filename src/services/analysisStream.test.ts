@@ -345,4 +345,114 @@ describe('runAnalysisTask', () => {
     es.error();
     expect(h.onError).not.toHaveBeenCalled();
   });
+
+  it('done: retries stale snapshot (status=running) and uses terminal one when it arrives', async () => {
+    // 模拟后端时序 bug：done 事件推出后，第一次拉快照仍返回 running，
+    // 1s 后重试拿到 ok 终态。前端应用真实终态（带 result），不走 fallback 占位。
+    const runningSnap = {
+      trace_id: 't1',
+      status: 'running',
+      session_id: 's1',
+      user_id: 'u1',
+      created_at: 'x',
+      result: null,
+      error: null,
+    };
+    const okSnap = mockSnapshotOk();
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(runningSnap) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(okSnap) });
+
+    const h = makeHandlers();
+    runAnalysisTask('t1', h);
+    getLastEventSource()!.open();
+    getLastEventSource()!.emit('done', {
+      type: 'done', trace_id: 't1', ts: 'x', seq: 10,
+      status: 'ok', duration_ms: 3000,
+    });
+
+    // 推进时钟，让 1s 重试延迟过期
+    await vi.advanceTimersByTimeAsync(1_100);
+
+    await vi.waitFor(() => expect(h.onDone).toHaveBeenCalled());
+    // 应该用第二次返回的真实 ok 快照，而不是 fallback 占位
+    expect(h.onDone.mock.calls[0][0]).toEqual(okSnap);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('done: all snapshot attempts stale → fallback to done event with placeholder', async () => {
+    // 所有 3 次重试都拿到 running → 走 fallback，用 done 事件的 status:ok 构造占位
+    const runningSnap = {
+      trace_id: 't1',
+      status: 'running',
+      session_id: 's1',
+      user_id: 'u1',
+      created_at: 'x',
+      result: null,
+      error: null,
+    };
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(runningSnap) });
+
+    const h = makeHandlers();
+    runAnalysisTask('t1', h);
+    getLastEventSource()!.open();
+    getLastEventSource()!.emit('done', {
+      type: 'done', trace_id: 't1', ts: 'x', seq: 10,
+      status: 'ok', duration_ms: 3000,
+    });
+
+    // 推进 3s 让所有重试耗尽
+    await vi.advanceTimersByTimeAsync(3_500);
+
+    await vi.waitFor(() => expect(h.onDone).toHaveBeenCalled());
+    const delivered = h.onDone.mock.calls[0][0];
+    // fallback 构造的 ok 快照（带占位 markdown）
+    expect(delivered.status).toBe('ok');
+    expect(delivered.result?.report_markdown).toMatch(/分析已完成，但报告详情暂时无法加载/);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('done: snapshot fetch throws → fallback immediately (no retry on network error)', async () => {
+    // 第一次 fetch 就抛网络错（500）。按设计不在这里重试，直接走 fallback
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    const h = makeHandlers();
+    runAnalysisTask('t1', h);
+    getLastEventSource()!.open();
+    getLastEventSource()!.emit('done', {
+      type: 'done', trace_id: 't1', ts: 'x', seq: 10,
+      status: 'ok', duration_ms: 3000,
+    });
+
+    await vi.waitFor(() => expect(h.onDone).toHaveBeenCalled());
+    expect(h.onDone.mock.calls[0][0].result?.report_markdown).toMatch(/分析已完成/);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('done with status=error falls back to done event error', async () => {
+    // done 事件自己就是失败，且 snapshot 不可用 → fallback 的 error 分支
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      statusText: '',
+    });
+
+    const h = makeHandlers();
+    runAnalysisTask('t1', h);
+    getLastEventSource()!.open();
+    getLastEventSource()!.emit('done', {
+      type: 'done', trace_id: 't1', ts: 'x', seq: 10,
+      status: 'error', duration_ms: 1000,
+      error: { code: 'LLM_ERROR', message: 'rate limit' },
+    });
+
+    await vi.waitFor(() => expect(h.onDone).toHaveBeenCalled());
+    const delivered = h.onDone.mock.calls[0][0];
+    expect(delivered.status).toBe('error');
+    expect(delivered.error?.code).toBe('LLM_ERROR');
+  });
 });

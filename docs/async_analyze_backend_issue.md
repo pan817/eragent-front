@@ -165,3 +165,119 @@ data: {"type":"done","trace_id":"...","ts":"...","seq":N,"status":"ok","duration
 ---
 
 **附：本次复现的 trace_id**：`058282f5-dc2f-4771-8161-6a616525ec7b`（后端如需查具体一次调用的上下文）
+
+---
+
+# Issue 2：SSE 与快照接口对任务终态的可见性不一致
+
+> 报告时间：2026-04-14
+> 报告人：前端
+> 影响接口：`GET /api/v1/ptp-agent/analyze/tasks/{trace_id}`（同步快照）
+> 严重程度：**高** —— 前端会把实际成功的任务误报为"分析失败"
+> 状态：前端已做兜底（3 次 × 1s 重试 + done 事件兜底），但根因在后端
+
+## 1. 现象
+
+前端走异步链路完整跑通：SSE 收到 status/stage/tool/done 全套事件，`event: done` 明确给出 `status: "ok"`。此时前端按设计应调 `GET /analyze/tasks/{trace_id}` 拿完整 `result.report_markdown`。
+
+但**紧跟在 done 事件之后立即查同步快照接口，返回的 `status` 仍是 `running`，`result` 仍是 `null`**：
+
+```json
+{
+  "trace_id": "5b29c774-3165-4b87-bf84-a89573e2a3fe",
+  "status": "running",
+  "session_id": "f80974ea-1519-48b0-8686-52e7b5584d50",
+  "user_id": "xiegp",
+  "created_at": "2026-04-14T18:20:59.220348+08:00",
+  "started_at": "2026-04-14T18:20:59.220348+08:00",
+  "finished_at": null,
+  "duration_ms": null,
+  "stage": null,
+  "result": null,
+  "error": null
+}
+```
+
+前端原先的代码**盲信**这个快照的 `status`，当成任务没完成；叠加 `result=null` 走到失败分支显示"分析失败"。
+
+**用户观感**：后端日志里任务圆满完成，界面上却是红色的"分析失败"，毫无指向性。
+
+## 2. 复现案例
+
+- **trace_id**：`5b29c774-3165-4b87-bf84-a89573e2a3fe`
+- **时间线**：
+  - `18:20:59.149` 后端推 `event: status state=queued`
+  - `18:21:46.639` 后端推 `event: done status=ok duration_ms=47469`
+  - `18:21:46.6xx`（紧随其后）前端 `GET /analyze/tasks/{trace_id}` 返回 `status=running, result=null`
+
+SSE 和快照接口对同一 trace_id 的状态描述**冲突**。
+
+## 3. 问题定位（后端侧）
+
+两种可能的后端实现问题（按怀疑度排序）：
+
+### P0 —— done 事件发布早于快照落库
+
+后端很可能在"任务完成"这一刻做了两件事：
+1. 向 event bus publish `done` 事件 → SSE 立刻推给前端
+2. 把 `result` 写入快照存储
+
+如果**步骤 1 早于步骤 2 提交**（异步、不同 goroutine / task，或者 1 是内存队列推送、2 是数据库写入），就会出现"前端已收到 done，但快照还没 result"的 race window。
+
+**建议修复**：把"publish done"放到"result 落库已提交"之后，或者让两个动作变成原子事务。
+
+### P1 —— 快照接口读的是旧副本
+
+如果 `GET /analyze/tasks/{trace_id}` 读的是某个 read replica / 缓存层（如 Redis 缓存、查询副本库），主写路径提交后副本同步有延迟，也会出现这种观察。
+
+**建议排查**：确认快照接口的数据源是否有 replication lag。如有，该接口应该强制读主库，或者提供 `?consistent=true` 参数。
+
+### P2 —— 状态更新漏写
+
+如果后端任务状态机有"ok 之后应该把 status 字段更新为 ok"这一步，但漏写了一部分字段（只写 result，没写 status），就会出现这种观察。
+
+**建议排查**：查看任务完成的收尾代码，确认 `status` 字段是否跟 `result` 一起写入。
+
+## 4. 验证方法
+
+```bash
+# 用 curl 同时订阅 SSE 和轮询快照
+TID=$(curl -s -X POST http://localhost:3000/api/v1/ptp-agent/analyze/async \
+  -H "Content-Type: application/json" \
+  -d '{"query":"查看最近30天的采购订单异常","user_id":"u1","auto_persist":false}' \
+  | jq -r .trace_id)
+
+# Terminal A：盯 SSE
+curl -N "http://localhost:3000/api/v1/ptp-agent/analyze/tasks/$TID/events"
+
+# Terminal B：在看到 Terminal A 的 "event: done" 后立即手动跑一次
+curl -s "http://localhost:3000/api/v1/ptp-agent/analyze/tasks/$TID" | jq
+```
+
+**验收标准**：
+- [ ] 收到 `event: done` 后，**立即**（< 100ms）调快照接口，`status` 必须是 `ok` / `error` / `aborted`（而不是 `running` / `queued`）
+- [ ] 如果 `status` 是 `ok`，`result` 字段必须包含完整报告（`report_markdown` 非空）
+- [ ] 如果 `status` 是 `error`，`error` 字段必须有 `{code, message}`
+
+## 5. 前端侧的兜底（已实施）
+
+**改动**：[src/services/analysisStream.ts](../src/services/analysisStream.ts) 的 `'done'` 事件处理引入 `fetchSnapshotUntilTerminal`。
+
+**策略**：
+- 收到 `done` 后拉快照，若 `status` 是 `running` / `queued`，等 1s 再试，最多 3 次
+- 3 次都拿不到终态 → 用 `done` 事件本身的 `status` / `error` 构造一个最小 snapshot 交给 UI（成功分支显示"✅ 分析已完成，但报告详情暂时无法加载"占位文案）
+- 整个过程对用户透明，最坏多等 3 秒
+
+**代价**：
+- 后端修好前，每次任务完成都至少多打 1 次快照请求（race window 存在时最多 3 次）
+- 如果 race window > 3s，用户看到的是占位文案，失去详细报告的展示机会（但比"分析失败"红字好得多）
+
+**这个兜底不替代后端修复**。前端只能等最终状态，后端如果一直不同步，占位文案就会长期占主导。
+
+## 6. 联系人 / 后续
+
+- 后端修复后请在此文档末尾追加修复说明（改了哪些文件 / 变更的 commit hash）
+- 修复上线后前端会做一次联调验证：
+  - [ ] `event: done` 后立即查快照，`status` 能立刻看到 `ok` / `error` / `aborted`
+  - [ ] `result.report_markdown` 非空
+  - [ ] Network 面板里只有一次 `GET /analyze/tasks/{id}` 请求（没有重试）

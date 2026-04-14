@@ -48,6 +48,19 @@ const MAX_CONSECUTIVE_FAILURES = 5;
  * 防止"成功一次 → 失败 N 次 → 成功一次"的抖动模式绕过连续计数器。
  */
 const MAX_TOTAL_FAILURES = 10;
+/**
+ * SSE 推来 done 事件后，拉快照拿最终 result 的重试次数与间隔。
+ * 实测后端存在一个时序 bug：done 事件推出后 GET /analyze/tasks/{id} 仍短暂返回
+ * `{status: 'running', result: null}`。短重试兜住这个 race window，同时不会让
+ * 用户等太久（3 次 × 1s = 最多 3s）。
+ */
+const SNAPSHOT_TERMINAL_MAX_ATTEMPTS = 3;
+const SNAPSHOT_TERMINAL_RETRY_DELAY_MS = 1_000;
+const SNAPSHOT_TERMINAL_STATUSES: ReadonlySet<string> = new Set([
+  'ok',
+  'error',
+  'aborted',
+]);
 
 export interface AnalysisStreamHandlers {
   /** 阶段文案变更（气泡内单行展示） */
@@ -180,6 +193,83 @@ export function runAnalysisTask(
     });
   };
 
+  /**
+   * 拉快照直到拿到终态（ok / error / aborted）。
+   *
+   * 兜住后端已知问题：done 事件推出后 GET /analyze/tasks/{id} 仍短暂返回
+   * `{status: 'running', result: null}`。重试最多 3 次，每次间隔 1s。
+   * 超过后抛错，由调用方走 done 事件兜底构造占位。
+   *
+   * 任何一次网络失败直接抛（不在这里重试，交给调用方兜底）。
+   */
+  const fetchSnapshotUntilTerminal = async (): Promise<TaskSnapshot> => {
+    for (let attempt = 0; attempt < SNAPSHOT_TERMINAL_MAX_ATTEMPTS; attempt++) {
+      if (stopped) throw new Error('runAnalysisTask already stopped');
+      const snap = await fetchTaskSnapshot(traceId);
+      if (SNAPSHOT_TERMINAL_STATUSES.has(snap.status)) return snap;
+      if (attempt < SNAPSHOT_TERMINAL_MAX_ATTEMPTS - 1) {
+        await new Promise<void>(resolve =>
+          setTimeout(resolve, SNAPSHOT_TERMINAL_RETRY_DELAY_MS)
+        );
+      }
+    }
+    throw new ApiError(
+      0,
+      ApiErrorCode.NETWORK_ERROR,
+      '后端快照接口未在预期时间内同步到任务终态'
+    );
+  };
+
+  /**
+   * done 事件兜底：拉快照失败（网络错 / 一直 running 超时）时，
+   * 依据 done 事件本身给出最终反馈。task 已经 done 了，不让 finishError 把成功误报为失败。
+   */
+  const applyDoneEventFallback = (e: DoneEvent) => {
+    const baseSnap = {
+      trace_id: traceId,
+      session_id: '',
+      user_id: '',
+      created_at: new Date().toISOString(),
+      duration_ms: e.duration_ms,
+    };
+    if (e.status === 'ok') {
+      finishOk({
+        ...baseSnap,
+        status: 'ok',
+        result: {
+          report_id: '',
+          status: 'success',
+          analysis_type: '',
+          query: '',
+          user_id: '',
+          session_id: '',
+          time_range: '',
+          anomalies: [],
+          supplier_kpis: [],
+          summary: {},
+          report_markdown:
+            '✅ 分析已完成，但报告详情暂时无法加载。\n\n请稍后刷新页面查看结果。',
+          error: null,
+          completed_tasks: [],
+          failed_tasks: [],
+          created_at: new Date().toISOString(),
+          duration_ms: e.duration_ms,
+          trace_id: traceId,
+        },
+      });
+    } else if (e.error) {
+      finishOk({ ...baseSnap, status: e.status, error: e.error });
+    } else {
+      finishError(
+        new ApiError(
+          0,
+          ApiErrorCode.NETWORK_ERROR,
+          '任务失败但未提供错误信息'
+        )
+      );
+    }
+  };
+
   const handleEvent = (evt: AnalysisTaskEvent) => {
     if (stopped) return;
     // heartbeat 只代表连接存活，不代表任务有进展；不刷新 watchdog，
@@ -235,51 +325,11 @@ export function runAnalysisTask(
 
       case 'done': {
         const e = evt as DoneEvent;
-        // done 后 EventSource 即将被服务端关闭；这里主动拉快照拿完整 result
-        fetchTaskSnapshot(traceId)
+        // done 后主动拉快照拿完整 result。重试兜住后端快照状态滞后（SSE 已 done 但
+        // 快照仍返回 running/result:null）；若仍失败，用 done 事件兜底避免误报失败。
+        fetchSnapshotUntilTerminal()
           .then(snap => finishOk(snap))
-          .catch(err => {
-            // 快照拉不到的兜底：依据 done 事件本身给用户有效反馈，
-            // 不把整个流程 finishError（done 已经说明了任务终态）
-            const baseSnap = {
-              trace_id: traceId,
-              session_id: '',
-              user_id: '',
-              created_at: new Date().toISOString(),
-              duration_ms: e.duration_ms,
-            };
-            if (e.status === 'ok') {
-              // 任务成功但快照接口不可用：构造一个最小 result，气泡显示"分析完成但详情暂不可用"
-              finishOk({
-                ...baseSnap,
-                status: 'ok',
-                result: {
-                  report_id: '',
-                  status: 'success',
-                  analysis_type: '',
-                  query: '',
-                  user_id: '',
-                  session_id: '',
-                  time_range: '',
-                  anomalies: [],
-                  supplier_kpis: [],
-                  summary: {},
-                  report_markdown:
-                    '✅ 分析已完成，但报告详情暂时无法加载。\n\n请稍后刷新页面查看结果。',
-                  error: null,
-                  completed_tasks: [],
-                  failed_tasks: [],
-                  created_at: new Date().toISOString(),
-                  duration_ms: e.duration_ms,
-                  trace_id: traceId,
-                },
-              });
-            } else if (e.error) {
-              finishOk({ ...baseSnap, status: e.status, error: e.error });
-            } else {
-              finishError(err);
-            }
-          });
+          .catch(() => applyDoneEventFallback(e));
         return;
       }
     }

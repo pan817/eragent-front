@@ -11,6 +11,7 @@ import TraceGantt from './trace/TraceGantt';
 import TokenAnalysis from './trace/TokenAnalysis';
 import TokenTrend, { type TrendPoint } from './trace/TokenTrend';
 import SpanDrawer from './trace/SpanDrawer';
+import { TraceSummarySkeleton, TraceTopSpansSkeleton } from './Skeleton';
 
 interface Props {
   traceId: string;
@@ -220,10 +221,11 @@ export default function TraceModal({
         </div>
         <div className="modal-body">
           {loading && (
-            <div className="modal-loading">
-              <div className="spinner" />
-              <span>加载中...</span>
-            </div>
+            <>
+              <TraceSummarySkeleton />
+              <TraceTopSpansSkeleton />
+              <div className="sr-only" role="status" aria-live="polite">加载 Trace 数据中...</div>
+            </>
           )}
           {error && <div className="modal-error">⚠️ {error}</div>}
           {data && (

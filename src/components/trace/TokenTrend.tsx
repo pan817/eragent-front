@@ -2,6 +2,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts';
+import { ChartBlockSkeleton } from '../Skeleton';
 
 export interface TrendPoint {
   time: string;
@@ -42,7 +43,7 @@ export default function TokenTrend({
         )}
       </div>
       {!isExpanded ? null : loading ? (
-        <div className="modal-loading"><div className="spinner" /><span>加载趋势数据...</span></div>
+        <ChartBlockSkeleton height={220} />
       ) : data.length < 1 ? (
         <div className="modal-empty">暂无趋势数据</div>
       ) : (

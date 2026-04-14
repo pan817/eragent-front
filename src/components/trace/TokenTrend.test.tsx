@@ -30,11 +30,13 @@ describe('TokenTrend', () => {
     expect(screen.getByTestId('line-chart')).toBeInTheDocument()
   })
 
-  it('shows loading state', () => {
+  it('shows loading skeleton', () => {
     const data = [{ time: '04/13 10:00', peakPrompt: 5000, budgetPct: 50 }]
-    render(<TokenTrend data={data} loading={true} budgetWarningThreshold={80} />)
+    const { container } = render(
+      <TokenTrend data={data} loading={true} budgetWarningThreshold={80} />,
+    )
 
-    expect(screen.getByText('加载趋势数据...')).toBeInTheDocument()
+    expect(container.querySelector('.skeleton-chart')).toBeInTheDocument()
     expect(screen.queryByTestId('line-chart')).not.toBeInTheDocument()
   })
 

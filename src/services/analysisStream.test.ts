@@ -24,6 +24,7 @@ function makeHandlers() {
     onTimelineAppend: vi.fn(),
     onDone: vi.fn(),
     onError: vi.fn(),
+    onDegraded: vi.fn(),
   };
 }
 
@@ -196,21 +197,57 @@ describe('runAnalysisTask', () => {
     expect(es.closed).toBe(true);
   });
 
-  it('non-heartbeat event resets watchdog', async () => {
+  it('non-heartbeat event resets watchdog and upgrades to warm window', async () => {
     const h = makeHandlers();
     runAnalysisTask('t1', h);
     const es = getLastEventSource()!;
     es.open();
 
-    // 10s 后推一条业务事件，重置 watchdog
+    // 10s 后推一条业务事件：刷新 lastEventAt 并从冷窗口(30s)切到暖窗口(180s)
     await vi.advanceTimersByTimeAsync(10_000);
     es.emit('stage', {
       type: 'stage', trace_id: 't1', ts: 'x', seq: 1, name: 'intent_resolved',
     });
 
-    // 再过 20s（总共 30s），未到 lastEventAt + 30s 的阈值
+    // 再过 20s（若仍是冷窗口会降级，暖窗口下不会）
     await vi.advanceTimersByTimeAsync(20_000);
     expect(mockFetch).not.toHaveBeenCalled();
     expect(es.closed).toBe(false);
+  });
+
+  it('warm window tolerates 60s silence between business events (long LLM call)', async () => {
+    const h = makeHandlers();
+    runAnalysisTask('t1', h);
+    const es = getLastEventSource()!;
+    es.open();
+
+    // 建连后立刻收到一条业务事件 → 进入暖窗口
+    es.emit('stage', {
+      type: 'stage', trace_id: 't1', ts: 'x', seq: 1, name: 'intent_resolved',
+    });
+
+    // 模拟 60s 无事件（一次长 LLM 调用），应当不触发降级
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(es.closed).toBe(false);
+    expect(h.onDegraded).not.toHaveBeenCalled();
+  });
+
+  it('warm window finally degrades after > 180s silence', async () => {
+    const snap = mockSnapshotOk();
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(snap) });
+    const h = makeHandlers();
+    runAnalysisTask('t1', h);
+    const es = getLastEventSource()!;
+    es.open();
+
+    es.emit('stage', {
+      type: 'stage', trace_id: 't1', ts: 'x', seq: 1, name: 'intent_resolved',
+    });
+
+    // 185s 静默 → 超过 180s 暖窗口 → 降级
+    await vi.advanceTimersByTimeAsync(185_000);
+    expect(es.closed).toBe(true);
+    await vi.waitFor(() => expect(h.onDone).toHaveBeenCalled());
   });
 });

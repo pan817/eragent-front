@@ -24,7 +24,17 @@ import { ApiError, ApiErrorCode } from '../types/api';
 import { fetchTaskSnapshot, taskEventStreamUrl } from './api';
 import { stageText, toolText } from '../utils/analysisStageText';
 
-const NO_EVENT_TIMEOUT_MS = 30_000;
+/**
+ * 冷启动窗口：从 SSE 建连开始，30s 内完全没收到任何业务事件就降级。
+ * 主要用来捕获"后端 heartbeat-only"这种坏掉的场景。
+ */
+const COLD_NO_EVENT_TIMEOUT_MS = 30_000;
+/**
+ * 暖运行窗口：已经收到过至少一条业务事件后，后续事件间的静默容忍度。
+ * 主要避免把"模型推理期间长时间无事件"误判为卡死——一次 LLM 调用 60-120s
+ * 很常见，再留出余量到 180s。超过这个窗口仍无事件才降级。
+ */
+const WARM_NO_EVENT_TIMEOUT_MS = 180_000;
 const NO_EVENT_CHECK_INTERVAL_MS = 5_000;
 const POLL_INTERVAL_MS = 2_000;
 const GLOBAL_TIMEOUT_MS = 15 * 60 * 1000;
@@ -49,6 +59,8 @@ export function runAnalysisTask(
   let stopped = false;
   let es: EventSource | null = null;
   let lastEventAt = Date.now();
+  // 已经收到过至少一条业务事件（非 heartbeat）？决定 watchdog 用冷/暖窗口。
+  let hasReceivedBusinessEvent = false;
   let watchdog: ReturnType<typeof setInterval> | null = null;
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   let pollStartedAt: number | null = null;
@@ -127,6 +139,7 @@ export function runAnalysisTask(
     // 详见 docs/async_analyze_backend_issue.md。
     if (evt.type !== 'heartbeat') {
       lastEventAt = Date.now();
+      hasReceivedBusinessEvent = true;
     }
 
     switch (evt.type) {
@@ -272,14 +285,21 @@ export function runAnalysisTask(
     }
   };
 
-  // ---- 30s 无事件看门狗 ----
+  // ---- 看门狗：冷启动 30s / 暖运行 180s 无事件则降级 ----
+  // 冷窗口：从建连起 30s 内一个业务事件都没收到 → 后端大概率是 heartbeat-only bug，早降级；
+  // 暖窗口：已经收到过业务事件 → 只在异常长时间静默（> 3min）时才降级，避免误杀
+  // 正在推理的长任务（单次 LLM 调用 60-120s 很常见）。
   watchdog = setInterval(() => {
     if (stopped) return;
     if (exceededGlobalTimeout()) {
       finishError(new ApiError(0, ApiErrorCode.TIMEOUT, '任务超时，请重新发起'));
       return;
     }
-    if (Date.now() - lastEventAt > NO_EVENT_TIMEOUT_MS && pollStartedAt === null) {
+    if (pollStartedAt !== null) return;
+    const window = hasReceivedBusinessEvent
+      ? WARM_NO_EVENT_TIMEOUT_MS
+      : COLD_NO_EVENT_TIMEOUT_MS;
+    if (Date.now() - lastEventAt > window) {
       startPolling();
     }
   }, NO_EVENT_CHECK_INTERVAL_MS);

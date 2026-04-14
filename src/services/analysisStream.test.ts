@@ -250,4 +250,99 @@ describe('runAnalysisTask', () => {
     expect(es.closed).toBe(true);
     await vi.waitFor(() => expect(h.onDone).toHaveBeenCalled());
   });
+
+  it('polling 5 consecutive failures triggers finishError (circuit breaker)', async () => {
+    // 降级后轮询 fetchTaskSnapshot 连续返回 500（ApiError 非 network），
+    // 应在 5 次连续失败后 finishError，而不是无限重试 15 分钟
+    const h = makeHandlers();
+    runAnalysisTask('t1', h);
+    const es = getLastEventSource()!;
+    // 让 SSE 建连失败立即降级到轮询
+    es.error();
+
+    // 让 fetchTaskSnapshot 持续失败（模拟 500）
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // 第 1 次 tick 是 startPolling() 里立即触发的；后续每 2s 一次
+    // 5 次连续失败 ≈ 第 5 次 tick 触发 finishError
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(h.onError).toHaveBeenCalled();
+    expect(h.onError.mock.calls[0][0].message).toMatch(/连续.*次请求失败/);
+  });
+
+  it('polling failures reset on success (circuit breaker does not trip intermittently)', async () => {
+    // 2 次失败后成功一次，再 2 次失败 —— 总共 4 次失败，但连续最多 2 次，不应熔断
+    const h = makeHandlers();
+    runAnalysisTask('t1', h);
+    getLastEventSource()!.error();
+
+    const failResp = { ok: false, status: 500, statusText: '' };
+    const okRunning = {
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          trace_id: 't1',
+          status: 'running',
+          session_id: 's1',
+          user_id: 'u1',
+          created_at: 'x',
+        }),
+    };
+    mockFetch
+      .mockResolvedValueOnce(failResp)
+      .mockResolvedValueOnce(failResp)
+      .mockResolvedValueOnce(okRunning)
+      .mockResolvedValueOnce(failResp)
+      .mockResolvedValueOnce(failResp)
+      .mockResolvedValue(okRunning);
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(h.onError).not.toHaveBeenCalled();
+  });
+
+  it('SSE post-connect error counts toward failure cap', async () => {
+    // 建连成功后反复 error()（模拟 backend 持续断线重连），累计到阈值后熔断
+    const h = makeHandlers();
+    runAnalysisTask('t1', h);
+    const es = getLastEventSource()!;
+    es.open();
+
+    // 连续 5 次 onerror（不中间夹任何业务事件）→ 熔断 finishError
+    for (let i = 0; i < 5; i++) {
+      es.error();
+    }
+    expect(h.onError).toHaveBeenCalled();
+    expect(h.onError.mock.calls[0][0].message).toMatch(/连续.*次请求失败/);
+    expect(es.closed).toBe(true);
+  });
+
+  it('business event resets SSE onerror counter', async () => {
+    // SSE 报错几次 → 中间收到业务事件 → 计数器清零 → 继续容忍
+    const h = makeHandlers();
+    runAnalysisTask('t1', h);
+    const es = getLastEventSource()!;
+    es.open();
+
+    // 先 3 次 error（未达阈值 5）
+    es.error();
+    es.error();
+    es.error();
+    expect(h.onError).not.toHaveBeenCalled();
+
+    // 一条业务事件：清零计数
+    es.emit('stage', {
+      type: 'stage', trace_id: 't1', ts: 'x', seq: 1, name: 'intent_resolved',
+    });
+
+    // 再 4 次 error —— 如果没清零，累计 7 次已超阈值；清零后只算 4 次，不应熔断
+    es.error();
+    es.error();
+    es.error();
+    es.error();
+    expect(h.onError).not.toHaveBeenCalled();
+  });
 });

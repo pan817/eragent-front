@@ -38,6 +38,16 @@ const WARM_NO_EVENT_TIMEOUT_MS = 180_000;
 const NO_EVENT_CHECK_INTERVAL_MS = 5_000;
 const POLL_INTERVAL_MS = 2_000;
 const GLOBAL_TIMEOUT_MS = 15 * 60 * 1000;
+/**
+ * 熔断：连续失败超此阈值立即 finishError。
+ * 2s 轮询 × 5 次 ≈ 10s 确认真断，避免 504/500/SSE 反复 error 时无限重试。
+ */
+const MAX_CONSECUTIVE_FAILURES = 5;
+/**
+ * 熔断：整个任务周期累计失败上限。
+ * 防止"成功一次 → 失败 N 次 → 成功一次"的抖动模式绕过连续计数器。
+ */
+const MAX_TOTAL_FAILURES = 10;
 
 export interface AnalysisStreamHandlers {
   /** 阶段文案变更（气泡内单行展示） */
@@ -64,6 +74,9 @@ export function runAnalysisTask(
   let watchdog: ReturnType<typeof setInterval> | null = null;
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   let pollStartedAt: number | null = null;
+  // 失败熔断计数器：SSE onerror（已建连态）与轮询失败共用一套计数
+  let consecutiveFailures = 0;
+  let totalFailures = 0;
 
   const globalStartedAt = Date.now();
 
@@ -84,6 +97,41 @@ export function runAnalysisTask(
     if (stopped) return;
     cleanup();
     handlers.onError(err);
+  };
+
+  /**
+   * 记一次失败，超阈值则 finishError 并返回 true（调用方据此提前返回）。
+   * SSE 断连（已建连态）、轮询 fetch 失败、轮询返回 5xx 都走这里。
+   *
+   * 熔断时统一抛出"连续/累计 N 次请求失败"的消息，底层 err 作为日志线索（console.warn），
+   * 不直接作为用户可见文案 —— 用户看到的是"反复重试已停止"这件事，比单次 500 更准确。
+   */
+  const recordFailure = (err: Error): boolean => {
+    consecutiveFailures++;
+    totalFailures++;
+    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      console.warn('[analysisStream] 熔断：连续失败过多', err);
+      finishError(
+        new ApiError(
+          0,
+          ApiErrorCode.NETWORK_ERROR,
+          `连续 ${consecutiveFailures} 次请求失败，已停止重试`
+        )
+      );
+      return true;
+    }
+    if (totalFailures >= MAX_TOTAL_FAILURES) {
+      console.warn('[analysisStream] 熔断：累计失败过多', err);
+      finishError(
+        new ApiError(
+          0,
+          ApiErrorCode.NETWORK_ERROR,
+          `累计 ${totalFailures} 次请求失败，已停止重试`
+        )
+      );
+      return true;
+    }
+    return false;
   };
 
   const exceededGlobalTimeout = () =>
@@ -107,18 +155,18 @@ export function runAnalysisTask(
     try {
       const snap = await fetchTaskSnapshot(traceId);
       if (stopped) return;
+      // 响应成功就算连续失败清零（status=ok/error/aborted 是业务终态，走 finishOk）
+      consecutiveFailures = 0;
       if (snap.status === 'ok' || snap.status === 'error' || snap.status === 'aborted') {
         finishOk(snap);
         return;
       }
     } catch (err) {
       if (stopped) return;
-      // 单次轮询失败不立即 fail；留给下次重试或全局超时
-      // 但连网络不通的错误直接 fail 避免空转
-      if (err instanceof ApiError && err.isNetworkError()) {
-        finishError(err);
-        return;
-      }
+      // 任何失败都计数（含 504/500 等 5xx、网络断、JSON 解析失败等）
+      // 连续 MAX_CONSECUTIVE_FAILURES 次或累计 MAX_TOTAL_FAILURES 次 → 熔断，终止任务
+      const e = err instanceof Error ? err : new Error(String(err));
+      if (recordFailure(e)) return;
     }
     pollTimer = setTimeout(tick, POLL_INTERVAL_MS);
   };
@@ -140,6 +188,8 @@ export function runAnalysisTask(
     if (evt.type !== 'heartbeat') {
       lastEventAt = Date.now();
       hasReceivedBusinessEvent = true;
+      // 真的收到业务事件说明 SSE 畅通，把连续失败计数器清零（totalFailures 不清 —— 累计指标不重置）
+      consecutiveFailures = 0;
     }
 
     switch (evt.type) {
@@ -279,10 +329,15 @@ export function runAnalysisTask(
 
   es.onerror = () => {
     if (stopped) return;
-    // 建连失败：立即降级；已建连后异常先交给 EventSource 自动重连
+    // 建连失败：立即降级
     if (!connected) {
       startPolling();
+      return;
     }
+    // 已建连后的异常：计入失败熔断计数器。阈值内交给 EventSource 自动重连，超阈值 finishError。
+    // 这是兜住"SSE 建连后反复断线重连"的关键：没有这个计数，EventSource 默认会无限重连，
+    // Network 面板里 /events 请求会一直刷直到 15 分钟全局超时。
+    if (recordFailure(new ApiError(0, ApiErrorCode.NETWORK_ERROR, 'SSE 连接中断'))) return;
   };
 
   // ---- 看门狗：冷启动 30s / 暖运行 180s 无事件则降级 ----

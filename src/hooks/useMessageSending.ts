@@ -1,9 +1,20 @@
 import { useState, useCallback, useRef } from 'react';
 import type { ChatMessage, ApiChatSession } from '../types/api';
+import { ApiError } from '../types/api';
 import { analyzeQuery } from '../services/api';
+import { showToast } from '../utils/toast';
 import type { SendOptions } from '../components/InputBar';
 
 import { genId } from '../utils/id';
+
+/** 把错误上报给顶层 toast，便于用户在离开该消息气泡视野时也能感知失败 */
+function reportSendError(err: unknown, fallbackMsg: string): string {
+  const msg = err instanceof Error ? err.message : fallbackMsg;
+  const level: 'warn' | 'error' =
+    err instanceof ApiError && err.isNetworkError() ? 'warn' : 'error';
+  showToast(msg, { level });
+  return msg;
+}
 
 const DEFAULT_SEND_OPTIONS: SendOptions = {
   role: 'general',
@@ -101,7 +112,7 @@ export function useMessageSending({
       realSessionId = await ensureRemoteSession();
     } catch (err) {
       console.error('[handleSend] ensureRemoteSession failed:', err);
-      const msg = err instanceof Error ? err.message : '会话创建失败，请重试';
+      const msg = reportSendError(err, '会话创建失败，请重试');
       setMessages(prev =>
         prev.map(m =>
           m.id === clientAssistantId
@@ -170,7 +181,7 @@ export function useMessageSending({
         commitSessionFromAnalyze(res.session);
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : '请求失败，请检查网络连接';
+      const errorMsg = reportSendError(err, '请求失败，请检查网络连接');
       setMessages(prev =>
         prev.map(m => (m.id === clientAssistantId ? { ...m, content: errorMsg, status: 'error', timestamp: new Date() } : m)),
         sendSessionId
@@ -206,7 +217,7 @@ export function useMessageSending({
         try {
           realSessionId = await ensureRemoteSession();
         } catch (err) {
-          const msg = err instanceof Error ? err.message : '会话创建失败，请重试';
+          const msg = reportSendError(err, '会话创建失败，请重试');
           setMessages(prev =>
             prev.map(m =>
               m.id === assistantMsgId
@@ -258,7 +269,7 @@ export function useMessageSending({
             commitSessionFromAnalyze(res.session);
           }
         } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : '请求失败，请检查网络连接';
+          const errorMsg = reportSendError(err, '请求失败，请检查网络连接');
           setMessages(prev =>
             prev.map(m =>
               m.id === assistantMsgId

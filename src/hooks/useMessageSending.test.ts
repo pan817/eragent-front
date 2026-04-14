@@ -1,6 +1,7 @@
 import { renderHook, act } from '@testing-library/react'
 import { useMessageSending } from './useMessageSending'
 import type { ChatMessage } from '../types/api'
+import { resetToasts, subscribeToasts, type ToastItem } from '../utils/toast'
 
 vi.mock('../services/api', () => ({
   analyzeQuery: vi.fn(),
@@ -23,7 +24,17 @@ const baseParams = () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  resetToasts()
 })
+
+function collectToasts(): ToastItem[] {
+  let latest: ToastItem[] = []
+  const unsubscribe = subscribeToasts(items => {
+    latest = items
+  })
+  unsubscribe()
+  return latest
+}
 
 describe('useMessageSending', () => {
   it('initializes with loading=false', () => {
@@ -85,7 +96,7 @@ describe('useMessageSending', () => {
     expect(params.setMessages).toHaveBeenCalled()
   })
 
-  it('handles analyzeQuery error gracefully', async () => {
+  it('handles analyzeQuery error gracefully and pushes a toast', async () => {
     const params = baseParams()
     mockAnalyzeQuery.mockRejectedValue(new Error('服务器内部错误'))
 
@@ -97,7 +108,10 @@ describe('useMessageSending', () => {
 
     // setMessages called for optimistic render + error update
     expect(params.setMessages).toHaveBeenCalled()
-    // Should not throw
+    const toasts = collectToasts()
+    expect(toasts).toHaveLength(1)
+    expect(toasts[0].message).toBe('服务器内部错误')
+    expect(toasts[0].level).toBe('error')
   })
 
   it('handles ensureRemoteSession failure', async () => {
@@ -256,5 +270,141 @@ describe('handleRegenerate', () => {
     })
 
     expect(mockAnalyzeQuery).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when previous message is not user role', () => {
+    const params = baseParams()
+    params.messages = [
+      { id: 'a-0', role: 'assistant', content: '前一条也是 assistant', timestamp: new Date(), status: 'success' },
+      { id: 'a-1', role: 'assistant', content: '要重试的', timestamp: new Date(), status: 'error' },
+    ]
+
+    const { result } = renderHook(() => useMessageSending(params))
+
+    act(() => {
+      result.current.handleRegenerate('a-1')
+    })
+
+    expect(mockAnalyzeQuery).not.toHaveBeenCalled()
+  })
+
+  it('handles regenerate error gracefully', async () => {
+    const params = baseParams()
+    params.messages = [
+      { id: 'u-1', role: 'user', content: '问题', timestamp: new Date() },
+      { id: 'a-1', role: 'assistant', content: '旧回复', timestamp: new Date(), status: 'error' },
+    ]
+
+    mockAnalyzeQuery.mockRejectedValue(new Error('网络错误'))
+
+    const { result } = renderHook(() => useMessageSending(params))
+
+    await act(async () => {
+      result.current.handleRegenerate('a-1')
+    })
+
+    await vi.waitFor(() => {
+      expect(mockAnalyzeQuery).toHaveBeenCalled()
+    })
+
+    // setMessages should be called with error content
+    expect(params.setMessages).toHaveBeenCalled()
+  })
+
+  it('handles regenerate ensureRemoteSession failure', async () => {
+    const params = baseParams()
+    params.messages = [
+      { id: 'u-1', role: 'user', content: '问题', timestamp: new Date() },
+      { id: 'a-1', role: 'assistant', content: '旧回复', timestamp: new Date(), status: 'error' },
+    ]
+    params.ensureRemoteSession = vi.fn().mockRejectedValue(new Error('创建失败'))
+
+    const { result } = renderHook(() => useMessageSending(params))
+
+    await act(async () => {
+      result.current.handleRegenerate('a-1')
+    })
+
+    await vi.waitFor(() => {
+      expect(params.setMessages).toHaveBeenCalled()
+    })
+
+    expect(mockAnalyzeQuery).not.toHaveBeenCalled()
+  })
+
+  it('handles regenerate with session ID switch (temp→real)', async () => {
+    const params = baseParams()
+    params.sessionId = 'temp-123'
+    params.ensureRemoteSession = vi.fn().mockResolvedValue('real-456')
+    params.messages = [
+      { id: 'u-1', role: 'user', content: '问题', timestamp: new Date() },
+      { id: 'a-1', role: 'assistant', content: '旧回复', timestamp: new Date(), status: 'error' },
+    ]
+
+    mockAnalyzeQuery.mockResolvedValue({
+      report_id: 'r-1', status: 'success', report_markdown: '新回复',
+      analysis_type: '', query: '', user_id: '', session_id: '',
+      time_range: '', anomalies: [], supplier_kpis: [], summary: {},
+      error: null, completed_tasks: [], failed_tasks: [],
+      created_at: '', duration_ms: 100,
+    })
+
+    const { result } = renderHook(() => useMessageSending(params))
+
+    await act(async () => {
+      result.current.handleRegenerate('a-1')
+    })
+
+    await vi.waitFor(() => {
+      expect(mockAnalyzeQuery).toHaveBeenCalledWith(
+        expect.objectContaining({ session_id: 'real-456' }),
+      )
+    })
+  })
+})
+
+describe('handleSend — session ID switch', () => {
+  it('switches loading state when ensureRemoteSession returns different ID', async () => {
+    const params = baseParams()
+    params.sessionId = 'temp-1'
+    params.ensureRemoteSession = vi.fn().mockResolvedValue('real-1')
+
+    mockAnalyzeQuery.mockResolvedValue({
+      report_id: 'r-1', status: 'success', report_markdown: 'ok',
+      analysis_type: '', query: '', user_id: '', session_id: '',
+      time_range: '', anomalies: [], supplier_kpis: [], summary: {},
+      error: null, completed_tasks: [], failed_tasks: [],
+      created_at: '', duration_ms: 0,
+    })
+
+    const { result } = renderHook(() => useMessageSending(params))
+
+    await act(async () => {
+      await result.current.handleSend('test')
+    })
+
+    expect(mockAnalyzeQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ session_id: 'real-1' }),
+    )
+  })
+
+  it('handles failed analysis with error status in response', async () => {
+    const params = baseParams()
+    mockAnalyzeQuery.mockResolvedValue({
+      report_id: 'r-1', status: 'error', report_markdown: '',
+      analysis_type: '', query: '', user_id: '', session_id: '',
+      time_range: '', anomalies: [], supplier_kpis: [], summary: {},
+      error: '分析超时', completed_tasks: [], failed_tasks: [],
+      created_at: '', duration_ms: 0,
+    })
+
+    const { result } = renderHook(() => useMessageSending(params))
+
+    await act(async () => {
+      await result.current.handleSend('test')
+    })
+
+    // setMessages should be called with error content from response
+    expect(params.setMessages).toHaveBeenCalled()
   })
 })

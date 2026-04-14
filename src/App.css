@@ -1250,6 +1250,7 @@
     border-radius: var(--r-xl) var(--r-xl) 0 0;
     width: 100%;
     max-width: none;
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
   }
 
   .trace-summary {

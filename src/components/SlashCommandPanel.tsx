@@ -81,6 +81,7 @@ export default function SlashCommandPanel({ filter, activeIndex, onPick }: Props
                 type="button"
                 className={`slash-panel-item ${idx === activeIndex ? 'is-active' : ''}`}
                 onMouseDown={e => { e.preventDefault(); onPick(p); }}
+                onTouchStart={e => { e.preventDefault(); onPick(p); }}
               >
                 <div className="slash-panel-item-text">
                   <div className="slash-panel-item-title">{p.title}</div>

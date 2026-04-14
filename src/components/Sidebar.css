@@ -11,7 +11,7 @@
   border-right: 1px solid var(--border);
   padding: 16px 14px 14px;
   gap: 14px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 [data-theme='dark'] .sidebar {
@@ -81,16 +81,21 @@
   transition: all var(--dur-fast) var(--ease-out);
 }
 
-.sidebar-new-chat:hover {
-  background: var(--brand-gradient);
-  color: white;
-  border-color: transparent;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px var(--brand-500-30);
+@supports (hover: hover) {
+  .sidebar-new-chat:hover {
+    background: var(--brand-gradient);
+    color: white;
+    border-color: transparent;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px var(--brand-500-30);
+  }
 }
 
 .sidebar-new-chat:active {
   transform: translateY(0) scale(0.98);
+  background: var(--brand-gradient);
+  color: white;
+  border-color: transparent;
 }
 
 [data-theme='dark'] .sidebar-new-chat {

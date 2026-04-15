@@ -199,19 +199,21 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
    * 但 `await` 之后的微任务延续会在 React 渲染前运行——典型场景：
    *   ensureRemoteSession 成功 → setSessions(temp→real) → return real.id
    *   handleSend 继续 → isSessionAlive(real.id) → 读 sessionsRef → 仍是 temp 列表 → 误报不存活 → 静默丢弃请求
-   * 包装 setSessions，让它在 updater 里同步写 ref，消除 render 时差。
-   * 对 React 的行为完全无侵入：updater 仍是纯函数（幂等赋值同一 next 值）。
+   *
+   * 关键实现要点：ref 的写入必须在 React 的 setState updater *之外* 同步完成。
+   * 原因：React 18 把传给 setState 的 updater 函数延迟到"下次渲染前调度处理队列"时才调用，
+   * 而 `await` 续体在此之前就已经执行——此时 updater 里写 ref 的语句还没跑，ref 仍是旧值。
+   * 所以这里显式用 sessionsRef.current 作为 prev 计算 next，先同步写 ref，再把已算好的
+   * 值传给 setSessionsRaw（传值而非函数，React 照常批处理、等值比较仍生效）。
    */
   const setSessions = useCallback<Dispatch<SetStateAction<ChatSession[]>>>(
     updater => {
-      setSessionsRaw(prev => {
-        const next =
-          typeof updater === 'function'
-            ? (updater as (p: ChatSession[]) => ChatSession[])(prev)
-            : updater;
-        sessionsRef.current = next;
-        return next;
-      });
+      const next =
+        typeof updater === 'function'
+          ? (updater as (p: ChatSession[]) => ChatSession[])(sessionsRef.current)
+          : updater;
+      sessionsRef.current = next;
+      setSessionsRaw(next);
     },
     []
   );

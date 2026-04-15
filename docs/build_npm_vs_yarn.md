@@ -80,7 +80,39 @@ yarn preview
 
 ---
 
-## 四、测试代码是否参与构建？
+## 四、一键构建（推荐）
+
+常规的 `build` 只做类型检查 + 打包。如果希望**一条命令走完"代码检查 + 测试 + 构建"全流程**，用下面的组合命令。
+
+### 可用命令
+
+| 场景 | npm | yarn | 执行内容 |
+|------|-----|------|----------|
+| 完整流程（发版 / 提 PR 前） | `npm run build:all` | `yarn build:all` | lint → test → tsc → vite build |
+| 快速流程（跳过测试） | `npm run build:quick` | `yarn build:quick` | lint → tsc → vite build |
+
+> `build:all` 和 `build:quick` 内部直接调用 `eslint`/`vitest`/`tsc`/`vite`，**不绑定 npm 或 yarn**，两种方式执行完全等价。
+
+### 执行细节
+
+`build:all` 内部顺序（任一步失败立即中断）：
+1. `eslint . --max-warnings 0` —— 代码检查（严格模式，0 warning）
+2. `vitest run` —— 单次运行全部测试
+3. `tsc -b tsconfig.app.json tsconfig.node.json` —— 业务代码类型检查
+4. `vite build` —— 打包产物到 `dist/`
+
+`build:quick` 跳过第 2 步测试，其他相同。
+
+### 使用建议
+
+- **发版前**：`npm run build:all` / `yarn build:all`
+- **日常临时出包**：`npm run build:quick` / `yarn build:quick`
+- **纯打包验证（最快）**：`npm run build:fast` / `yarn build:fast`
+- **依赖变更时**：先 `npm install` 或 `yarn install`，再跑上面命令（依赖安装未包含在一键命令里，避免 npm/yarn 混用）
+
+---
+
+## 五、测试代码是否参与构建？
 
 **不参与。** 无论用 npm 还是 yarn，`build` 命令默认都跳过测试代码的类型检查与打包。
 
@@ -115,7 +147,7 @@ npm run typecheck:test     # 或 yarn typecheck:test
 
 ---
 
-## 五、其他构建相关命令
+## 六、其他构建相关命令
 
 | 目的 | npm | yarn |
 |------|-----|------|
@@ -128,7 +160,7 @@ npm run typecheck:test     # 或 yarn typecheck:test
 
 ---
 
-## 六、构建失败速查
+## 七、构建失败速查
 
 | 报错特征 | 处理方式 |
 |----------|----------|
@@ -140,7 +172,7 @@ npm run typecheck:test     # 或 yarn typecheck:test
 
 ---
 
-## 七、注意事项
+## 八、注意事项
 
 1. **不要同时使用 npm 和 yarn**：选定一个后只保留对应 lockfile（`package-lock.json` 或 `yarn.lock`），避免依赖版本漂移。
 2. **CI 与本地保持一致**：本地用 npm，CI 也用 npm；yarn 同理。

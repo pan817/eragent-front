@@ -176,9 +176,11 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
   }, [activeTraceId]);
 
   // 登录后自动继续发送暂存消息
+  // TODO: 重构为登录成功事件触发，避免 effect 内 setState 级联渲染
   useEffect(() => {
     if (userId && pendingQuery) {
       const q = pendingQuery;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPendingQuery(null);
       handleSendWithScroll(q, DEFAULT_SEND_OPTIONS);
     }

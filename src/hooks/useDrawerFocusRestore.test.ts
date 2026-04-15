@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react'
-import { useRef, type MutableRefObject } from 'react'
+import { type MutableRefObject } from 'react'
 import { useDrawerFocusRestore } from './useDrawerFocusRestore'
 
 function flushRaf() {

@@ -105,6 +105,8 @@ export default function SlashCommandPanel({ filter, activeIndex, onPick }: Props
 }
 
 /** 工具函数：返回过滤后的示例列表，供 InputBar 计算 activeIndex 用 */
+// TODO: 拆到独立工具文件以恢复 react-refresh 的 HMR 能力
+// eslint-disable-next-line react-refresh/only-export-components
 export function getFilteredPrompts(filter: string): ExamplePrompt[] {
   if (!filter) return EXAMPLE_PROMPTS;
   return EXAMPLE_PROMPTS.filter(

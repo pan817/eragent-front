@@ -12,6 +12,11 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    optimizeDeps: {
+      // 强制预构建：recharts 经 React.lazy 动态 import 引入，
+      // Vite 启动扫描漏掉会导致 react-is 未被一起预构建 → 运行时解析失败
+      include: ['recharts', 'react-is'],
+    },
     server: {
       host: '0.0.0.0', // 监听所有网卡，允许通过 IP 访问
       port: 3000,

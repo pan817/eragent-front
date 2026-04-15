@@ -1,5 +1,5 @@
 import { runAnalysisTask } from './analysisStream';
-import { installFakeEventSource, getLastEventSource, FakeEventSource } from '../test/fakeEventSource';
+import { installFakeEventSource, getLastEventSource } from '../test/fakeEventSource';
 import type { TaskSnapshot } from '../types/api';
 
 const mockFetch = vi.fn();

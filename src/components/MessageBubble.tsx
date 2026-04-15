@@ -42,9 +42,11 @@ function LoadingStages({
   const autoExpandedRef = useRef(false);
 
   const timelineLength = timeline?.length ?? 0;
+  // TODO: 改为 useMemo 派生 expanded 状态，避免 effect setState
   useEffect(() => {
     if (!autoExpandedRef.current && timelineLength > 0) {
       autoExpandedRef.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setExpanded(true);
     }
   }, [timelineLength]);
@@ -64,8 +66,11 @@ function LoadingStages({
 
   // resumedAt 后 N 秒内展示"已恢复"横幅，之后淡出
   const [showResumeBanner, setShowResumeBanner] = useState(!!resumedAt);
+  // TODO: 初次挂载由 useState 初值覆盖，effect 内 setState 仅为 resumedAt 变更；
+  // 后续可重构为 useMemo 派生 + 单独的淡出定时器 effect
   useEffect(() => {
     if (!resumedAt) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowResumeBanner(true);
     const timer = setTimeout(
       () => setShowResumeBanner(false),

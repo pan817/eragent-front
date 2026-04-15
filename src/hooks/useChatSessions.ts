@@ -276,7 +276,6 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   const currentSession = useMemo(

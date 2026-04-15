@@ -380,8 +380,6 @@ describe('useChatSessions — online mode (userId provided)', () => {
       expect(result.current.loading).toBe(false)
     })
 
-    const tempId = result.current.currentId
-
     // Simulate commitSessionFromAnalyze with a new session not in list
     act(() => {
       result.current.commitSessionFromAnalyze({

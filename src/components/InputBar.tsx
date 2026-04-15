@@ -150,7 +150,9 @@ export default function InputBar({
   );
 
   // 当过滤结果变化时重置索引
+  // TODO: 改为 useMemo 派生或放在 slashFilter 的 setter 里，避免 effect setState
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSlashIndex(0);
   }, [slashFilter]);
 
@@ -179,8 +181,10 @@ export default function InputBar({
   }, [onSend, options]);
 
   // 外部注入草稿（例如从示例问题库填入）
+  // TODO: 重构为父组件事件回调，避免 effect 内 setState
   useEffect(() => {
     if (draftNonce === undefined || draftText === undefined) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setInput(draftText);
     // 等待下一帧 textarea 存在并可操作
     rafRef.current = requestAnimationFrame(() => {

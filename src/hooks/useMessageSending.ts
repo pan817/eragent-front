@@ -3,6 +3,7 @@ import type {
   ChatMessage,
   ApiChatSession,
   AnalysisTimelineEntry,
+  ChunkEvent,
   TaskSnapshot,
 } from '../types/api';
 import { ApiError } from '../types/api';
@@ -198,6 +199,10 @@ export function useMessageSending({
                 timeline: undefined,
                 degradedToPolling: undefined,
                 resumedAt: undefined,
+                streaming: undefined,
+                chunkBuffer: undefined,
+                lastChunkIndex: undefined,
+                chunkBroken: undefined,
               }
             : m
         ),
@@ -253,6 +258,10 @@ export function useMessageSending({
                     degradedToPolling: undefined,
                     resumedAt: undefined,
                     errorCode: undefined,
+                    streaming: undefined,
+                    chunkBuffer: undefined,
+                    lastChunkIndex: undefined,
+                    chunkBroken: undefined,
                   }
                 : m
             ),
@@ -279,6 +288,10 @@ export function useMessageSending({
                     degradedToPolling: undefined,
                     resumedAt: undefined,
                     errorCode: snap.error?.code,
+                    streaming: undefined,
+                    chunkBuffer: undefined,
+                    lastChunkIndex: undefined,
+                    chunkBroken: undefined,
                   }
                 : m
             ),
@@ -343,6 +356,33 @@ export function useMessageSending({
           sid
         );
       },
+      onChunk: (chunk: ChunkEvent) => {
+        // 规则 1：message_id 不匹配直接丢弃（多任务并发或 Phase 2 新 node 的兼容）
+        if (chunk.message_id !== assistantMsgId) return;
+        setMessages(
+          prev =>
+            prev.map(m => {
+              if (m.id !== assistantMsgId) return m;
+              const last = m.lastChunkIndex ?? -1;
+              // 规则 2：后端 tenacity 重试 → index=0 且已经累加过内容 → 清 buffer 重新累加
+              const isRetryReset = chunk.index === 0 && last > 0;
+              const buffer = isRetryReset ? '' : (m.chunkBuffer ?? '');
+              // 规则 3：gap（非重试重置情况下 index 非连续）→ 标记 chunkBroken，仍 append；
+              // done 时会用 report_markdown 覆盖保证一致性
+              const isGap = !isRetryReset && last >= 0 && chunk.index > last + 1;
+              return {
+                ...m,
+                streaming: true,
+                chunkBuffer: buffer + (chunk.delta ?? ''),
+                lastChunkIndex: chunk.index,
+                chunkBroken: isGap ? true : (isRetryReset ? false : m.chunkBroken),
+                // chunk 期间隐藏 stageText（避免打字机上方仍显示"正在生成报告..."）
+                stageText: undefined,
+              };
+            }),
+          sid
+        );
+      },
       onDegraded: () => {
         setMessages(
           prev =>
@@ -381,6 +421,10 @@ export function useMessageSending({
                 degradedToPolling: undefined,
                 resumedAt: undefined,
                 errorCode: err instanceof ApiError ? err.code : undefined,
+                streaming: undefined,
+                chunkBuffer: undefined,
+                lastChunkIndex: undefined,
+                chunkBroken: undefined,
               };
             }),
           sid
@@ -605,7 +649,18 @@ export function useMessageSending({
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantMsgId
-            ? { ...m, content: '', status: 'sending' as const, durationMs: undefined }
+            ? {
+                ...m,
+                content: '',
+                status: 'sending' as const,
+                durationMs: undefined,
+                streaming: undefined,
+                chunkBuffer: undefined,
+                lastChunkIndex: undefined,
+                chunkBroken: undefined,
+                stageText: undefined,
+                timeline: undefined,
+              }
             : m
         ),
         regenSessionId

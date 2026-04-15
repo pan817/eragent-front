@@ -43,6 +43,7 @@ export function useAnalysisStreams(): UseAnalysisStreamsReturn {
       onTimelineAppend: handlers.onTimelineAppend,
       onTimelineUpdate: handlers.onTimelineUpdate,
       onDegraded: handlers.onDegraded,
+      onChunk: handlers.onChunk,
       onDone: snap => {
         activeRef.current.delete(traceId);
         handlers.onDone(snap);

@@ -118,6 +118,14 @@ export interface ChatMessage {
   resumedAt?: number;
   /** 失败时的错误码（TIMEOUT / INTENT_UNCLEAR 等）；决定是否展示重试按钮。 */
   errorCode?: string;
+  /** LLM 流式输出：已进入 token 级推送状态。首个 chunk 到达时置 true，done 后清空。 */
+  streaming?: boolean;
+  /** LLM 流式输出：已累加的增量文本缓冲区。done 后由 report_markdown 覆盖到 content 并清空。 */
+  chunkBuffer?: string;
+  /** LLM 流式输出：已处理的最大 chunk.index；用于检测后端重试（index=0 倒退）与 gap 缺失。 */
+  lastChunkIndex?: number;
+  /** LLM 流式输出：检测到 chunk gap（index 非连续）。需等 done 拉快照覆盖，不再信任 chunkBuffer。 */
+  chunkBroken?: boolean;
 }
 
 /** 气泡折叠时间线里的一行（只保留 stage 和 tool 事件，heartbeat 忽略） */
@@ -333,6 +341,19 @@ export interface ReportEvent extends BaseEvent {
 export interface HeartbeatEvent extends BaseEvent {
   type: 'heartbeat';
 }
+export interface ChunkEvent extends BaseEvent {
+  type: 'chunk';
+  /** 生成节点标识；Phase 1 只会出现 "report" */
+  node: 'report' | 'agent_final' | string;
+  /** 对应 assistant_message_id（字符串）。前端用这个 id 把 chunk 绑定到对应气泡 */
+  message_id: string;
+  /** 增量文本，直接 append（非累计） */
+  delta: string;
+  /** 该 message_id 内的 0-based 序号，单调递增；index=0 且 lastChunkIndex>0 视为重试重置 */
+  index: number;
+  /** 是否该 message 最后一个 chunk；true 时 delta 通常为空串 */
+  eos?: boolean;
+}
 export interface DoneEvent extends BaseEvent {
   type: 'done';
   status: 'ok' | 'error' | 'aborted';
@@ -348,6 +369,7 @@ export type AnalysisTaskEvent =
   | DagTaskEvent
   | ReportEvent
   | HeartbeatEvent
+  | ChunkEvent
   | DoneEvent;
 
 export function fromApiSession(

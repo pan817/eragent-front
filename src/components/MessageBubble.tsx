@@ -14,6 +14,7 @@ const RETRY_FORBIDDEN_CODES = new Set(['INTENT_UNCLEAR', 'NO_DATA']);
 const RESUME_BANNER_DURATION_MS = 3000;
 
 const MarkdownContent = lazy(() => import('./MarkdownContent'));
+const StreamingText = lazy(() => import('./StreamingText'));
 
 interface Props {
   message: ChatMessage;
@@ -272,6 +273,15 @@ h1,h2,h3{margin-top:24px;margin-bottom:8px}
         <div className={`message-bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
           {isUser ? (
             <p className="user-text">{message.content}</p>
+          ) : message.status === 'sending' && message.streaming ? (
+            // LLM token 流式打字机：首 chunk 到达后走这条分支，done 后 applySnapshot 切到 markdown
+            <Suspense fallback={<div className="markdown-body markdown-body--loading" aria-hidden="true" />}>
+              <StreamingText
+                text={message.chunkBuffer ?? ''}
+                broken={message.chunkBroken}
+                onStop={onStop ? () => onStop(message.id) : undefined}
+              />
+            </Suspense>
           ) : message.status === 'sending' ? (
             <LoadingStages
               stageText={message.stageText}

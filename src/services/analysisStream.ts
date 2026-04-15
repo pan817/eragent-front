@@ -14,6 +14,7 @@
 import type {
   AnalysisTaskEvent,
   AnalysisTimelineEntry,
+  ChunkEvent,
   DoneEvent,
   StageEvent,
   TaskSnapshot,
@@ -85,6 +86,12 @@ export interface AnalysisStreamHandlers {
   onError: (err: Error) => void;
   /** 流已从 SSE 降级为轮询。UI 可据此切换为"网络不稳定，正在查询结果..." */
   onDegraded?: () => void;
+  /**
+   * LLM 流式输出 token 级 chunk 事件（docs/sse_front_spec.md §3）。
+   * ReAct 兜底路径不会触发；调用方必须支持"整个任务没有任何 chunk"的情况。
+   * 注：chunk.seq=0，不参与全局 seq/Last-Event-ID 重放，断线丢失靠 done 拉快照兜底。
+   */
+  onChunk?: (chunk: ChunkEvent) => void;
 }
 
 export function runAnalysisTask(
@@ -373,6 +380,11 @@ export function runAnalysisTask(
       case 'report':
         return;
 
+      case 'chunk': {
+        handlers.onChunk?.(evt as ChunkEvent);
+        return;
+      }
+
       case 'done': {
         const e = evt as DoneEvent;
         // done 后主动拉快照拿完整 result。重试兜住后端快照状态滞后（SSE 已 done 但
@@ -413,6 +425,7 @@ export function runAnalysisTask(
   listen('dag_task');
   listen('report');
   listen('heartbeat');
+  listen('chunk');
   listen('done');
 
   es.onopen = () => {

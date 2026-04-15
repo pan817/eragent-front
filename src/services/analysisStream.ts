@@ -343,7 +343,7 @@ export function runAnalysisTask(
           handlers.onStage(`正在${text}`);
           pushTimeline(`${text}进行中`, key);
         } else {
-          updateTimeline(key, `${text}完成`, e.duration_ms);
+          updateTimeline(key, `${text}完成`, e.duration_ms ?? 0);
         }
         return;
       }
@@ -356,7 +356,7 @@ export function runAnalysisTask(
           handlers.onStage(`正在执行 ${text}`);
           pushTimeline(`${text} 执行中`, key);
         } else {
-          updateTimeline(key, `${text} 执行完成`, e.duration_ms);
+          updateTimeline(key, `${text} 执行完成`, e.duration_ms ?? 0);
         }
         return;
       }

@@ -15,10 +15,12 @@ vi.mock('../services/chatSessions', () => ({
 import {
   listSessions as apiListSessions,
   createSession as apiCreateSession,
+  searchSessions as apiSearchSessions,
 } from '../services/chatSessions'
 
 const mockListSessions = vi.mocked(apiListSessions)
 const mockCreateSession = vi.mocked(apiCreateSession)
+const mockSearchSessions = vi.mocked(apiSearchSessions)
 
 beforeEach(() => {
   try { localStorage.removeItem('erp-agent-chat-sessions-v1') } catch { /* ignore */ }
@@ -396,5 +398,80 @@ describe('useChatSessions — online mode (userId provided)', () => {
 
     // New session should be added to the list
     expect(result.current.sessions.some(s => s.id === 'new-sess')).toBe(true)
+  })
+})
+
+describe('useChatSessions — search debounce', () => {
+  it('debounces rapid input and fires only one API call 300ms after last keystroke', async () => {
+    vi.useFakeTimers()
+    mockListSessions.mockResolvedValue({ sessions: [], next_cursor: null })
+    mockSearchSessions.mockResolvedValue({ sessions: [], next_cursor: null })
+
+    const { result } = renderHook(() => useChatSessions('alice'))
+
+    // 等初始 listSessions 完成，避免 init 的 effect 打扰
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+
+    // 模拟连续 5 次击键（每次 50ms）
+    act(() => { result.current.setSearch('a') })
+    act(() => { vi.advanceTimersByTime(50) })
+    act(() => { result.current.setSearch('ab') })
+    act(() => { vi.advanceTimersByTime(50) })
+    act(() => { result.current.setSearch('abc') })
+    act(() => { vi.advanceTimersByTime(50) })
+    act(() => { result.current.setSearch('abcd') })
+    act(() => { vi.advanceTimersByTime(50) })
+    act(() => { result.current.setSearch('abcde') })
+
+    // 防抖 300ms 窗口未到，API 不应被调
+    expect(mockSearchSessions).not.toHaveBeenCalled()
+
+    // 推进到 300ms 之后，最后一次输入应该才触发一次 API 调用
+    await act(async () => { await vi.advanceTimersByTimeAsync(300) })
+
+    expect(mockSearchSessions).toHaveBeenCalledTimes(1)
+    expect(mockSearchSessions).toHaveBeenCalledWith('alice', 'abcde', expect.any(Object))
+
+    vi.useRealTimers()
+  })
+
+  it('does not fire API call if hook unmounts during debounce window', async () => {
+    vi.useFakeTimers()
+    mockListSessions.mockResolvedValue({ sessions: [], next_cursor: null })
+    mockSearchSessions.mockResolvedValue({ sessions: [], next_cursor: null })
+
+    const { result, unmount } = renderHook(() => useChatSessions('alice'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+
+    act(() => { result.current.setSearch('query') })
+    // 防抖窗口未到就卸载
+    act(() => { vi.advanceTimersByTime(100) })
+    unmount()
+    // 推进过 300ms 如果 effect cleanup 没生效会触发 API 调用
+    act(() => { vi.advanceTimersByTime(500) })
+
+    expect(mockSearchSessions).not.toHaveBeenCalled()
+
+    vi.useRealTimers()
+  })
+
+  it('clears search results when query empties (no API call for empty string)', async () => {
+    vi.useFakeTimers()
+    mockListSessions.mockResolvedValue({ sessions: [], next_cursor: null })
+    mockSearchSessions.mockResolvedValue({ sessions: [], next_cursor: null })
+
+    const { result } = renderHook(() => useChatSessions('alice'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+
+    act(() => { result.current.setSearch('hello') })
+    await act(async () => { await vi.advanceTimersByTimeAsync(300) })
+    expect(mockSearchSessions).toHaveBeenCalledTimes(1)
+
+    act(() => { result.current.setSearch('') })
+    await act(async () => { await vi.advanceTimersByTimeAsync(300) })
+    // 空查询直接清本地结果，不再打 API
+    expect(mockSearchSessions).toHaveBeenCalledTimes(1)
+
+    vi.useRealTimers()
   })
 })

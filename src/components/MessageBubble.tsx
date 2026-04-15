@@ -20,6 +20,8 @@ interface Props {
   userId?: string | null;
   onTraceClick?: (traceId: string) => void;
   onRegenerate?: (id: string) => void;
+  /** 用户主动停止进行中的分析。仅 status='sending' 时展示停止按钮。 */
+  onStop?: (id: string) => void;
 }
 
 interface LoadingStagesProps {
@@ -28,6 +30,7 @@ interface LoadingStagesProps {
   degradedToPolling?: boolean;
   resumedAt?: number;
   startedAt: Date;
+  onStop?: () => void;
 }
 
 function LoadingStages({
@@ -36,6 +39,7 @@ function LoadingStages({
   degradedToPolling,
   resumedAt,
   startedAt,
+  onStop,
 }: LoadingStagesProps) {
   // 用户手动切换状态；U5: 第 1 条 timeline 到达时自动展开一次（user 手动收起后不再自动展）
   const [expanded, setExpanded] = useState(false);
@@ -122,6 +126,17 @@ function LoadingStages({
             </svg>
           </button>
         )}
+        {onStop && (
+          <button
+            type="button"
+            className="loading-stop"
+            onClick={onStop}
+            aria-label="停止分析"
+            title="停止分析"
+          >
+            停止
+          </button>
+        )}
       </div>
       {hasTimeline && expanded && (
         <ul className="loading-timeline">
@@ -161,7 +176,7 @@ function stripMarkdown(md: string): string {
     .trim();
 }
 
-function MessageBubble({ message, userId, onTraceClick, onRegenerate }: Props) {
+function MessageBubble({ message, userId, onTraceClick, onRegenerate, onStop }: Props) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState<'md' | 'text' | false>(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -264,6 +279,7 @@ h1,h2,h3{margin-top:24px;margin-bottom:8px}
               degradedToPolling={message.degradedToPolling}
               resumedAt={message.resumedAt}
               startedAt={message.timestamp}
+              onStop={onStop ? () => onStop(message.id) : undefined}
             />
           ) : message.status === 'error' ? (
             <div className="error-block">

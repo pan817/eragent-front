@@ -7,7 +7,7 @@
  * 决策点对照 docs/async_analyze_frontend.md 和设计讨论：
  *  - SSE：原生 EventSource + URL query（项目无鉴权，不传参即可）
  *  - 降级：建连失败立即降级；建连后 30s 无业务事件（heartbeat 不计入）降级；降级后关闭 SSE，仅轮询
- *  - 轮询：2s 间隔；累计 15 分钟超时 → error
+ *  - 轮询：指数退避（2s 起，每次 running 翻倍，封顶 30s）；累计 15 分钟超时 → error
  *  - done：拉一次快照后回调 onDone；快照失败也走 onError
  *  - 时间线：stage 事件 + tool/dag_task 的 end 事件入时间线；heartbeat/report 不入
  */
@@ -36,7 +36,13 @@ const COLD_NO_EVENT_TIMEOUT_MS = 30_000;
  */
 const WARM_NO_EVENT_TIMEOUT_MS = 180_000;
 const NO_EVENT_CHECK_INTERVAL_MS = 5_000;
-const POLL_INTERVAL_MS = 2_000;
+/**
+ * 轮询起始间隔。拿到响应但任务仍 running 时，间隔按 2 倍翻至上限。
+ * 翻倍只在"成功响应 + status=running"时进行：任务明显没进展就放慢节奏，
+ * 避免 2s 固定间隔下 9.6 分钟挂起能打出 287 次请求。
+ */
+const POLL_INITIAL_INTERVAL_MS = 2_000;
+const POLL_MAX_INTERVAL_MS = 30_000;
 const GLOBAL_TIMEOUT_MS = 15 * 60 * 1000;
 /**
  * 熔断：连续失败超此阈值立即 finishError。
@@ -93,6 +99,7 @@ export function runAnalysisTask(
   let watchdog: ReturnType<typeof setInterval> | null = null;
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   let pollStartedAt: number | null = null;
+  let pollInterval = POLL_INITIAL_INTERVAL_MS;
   // 失败熔断计数器：SSE onerror（已建连态）与轮询失败共用一套计数
   let consecutiveFailures = 0;
   let totalFailures = 0;
@@ -187,6 +194,8 @@ export function runAnalysisTask(
         finishOk(snap);
         return;
       }
+      // 依然 running：翻倍下一次间隔，任务明显没进展就放慢节奏
+      pollInterval = Math.min(pollInterval * 2, POLL_MAX_INTERVAL_MS);
     } catch (err) {
       if (stopped) return;
       // abort 是调用方主动取消，不计入失败（cleanup 已经在 abort 之前把 stopped=true，
@@ -197,7 +206,7 @@ export function runAnalysisTask(
       const e = err instanceof Error ? err : new Error(String(err));
       if (recordFailure(e)) return;
     }
-    pollTimer = setTimeout(tick, POLL_INTERVAL_MS);
+    pollTimer = setTimeout(tick, pollInterval);
   };
 
   const pushTimeline = (text: string, matchKey?: string, durationMs?: number) => {

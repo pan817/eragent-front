@@ -28,6 +28,7 @@ const baseParams = () => ({
   ensureRemoteSession: vi.fn().mockResolvedValue('sess-1'),
   commitSessionFromAnalyze: vi.fn(),
   onNeedLogin: vi.fn(),
+  isSessionAlive: vi.fn().mockReturnValue(true),
 })
 
 beforeEach(() => {

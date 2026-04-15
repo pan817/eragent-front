@@ -32,6 +32,7 @@ const baseParams = () => ({
   ensureRemoteSession: vi.fn().mockResolvedValue('sess-1'),
   commitSessionFromAnalyze: vi.fn(),
   onNeedLogin: vi.fn(),
+  isSessionAlive: vi.fn().mockReturnValue(true),
 });
 
 function makeAck(): AnalysisTaskAck {
@@ -142,5 +143,54 @@ describe('useMessageSending (async branch)', () => {
     expect(result.current.loading).toBe(false);
     // 提交失败不应该打开 SSE
     expect(getLastEventSource()).toBeUndefined();
+  });
+
+  // 用户在 ack 返回期间删除了会话：handleSend 继续走到 registerStream+streams.start 会导致
+  // 流绑到已删除的会话、永远无法 stop。isSessionAlive 在每个 await 后校验，这里断言流没启动。
+  it('does not start stream if session deleted during submit await (send-then-delete race)', async () => {
+    // submit ack 延迟到 test 显式 resolve，模拟后端慢响应
+    let resolveSubmit!: (v: AnalysisTaskAck) => void;
+    mockSubmit.mockImplementation(
+      () => new Promise<AnalysisTaskAck>(r => { resolveSubmit = r; })
+    );
+
+    const params = baseParams();
+    // ensureRemoteSession 返回时 session 还在；submit 返回前被删
+    params.isSessionAlive = vi.fn()
+      .mockReturnValueOnce(true)   // ensureRemoteSession 之后
+      .mockReturnValue(false);     // submit ack 之后 → 已删
+
+    const { result } = renderHook(() => useMessageSending(params));
+
+    await act(async () => {
+      const p = result.current.handleSend('x');
+      // 先让 ensureRemoteSession 的微任务跑完，确保 submit 已被调用、resolveSubmit 已赋值
+      await vi.waitFor(() => expect(mockSubmit).toHaveBeenCalled());
+      resolveSubmit(makeAck());
+      await p;
+    });
+
+    expect(mockSubmit).toHaveBeenCalledTimes(1);
+    // 关键断言：流绝不能启动
+    expect(getLastEventSource()).toBeUndefined();
+    // loading 也要归零，不能卡在 sending 让 session 锁无法释放
+    expect(result.current.loading).toBe(false);
+  });
+
+  // 同一 race 的 ensureRemoteSession 窗口版本：会话在 ensureRemoteSession 之后、submit 之前就被删
+  it('does not submit or start stream if session deleted during ensureRemoteSession await', async () => {
+    const params = baseParams();
+    params.isSessionAlive = vi.fn().mockReturnValue(false); // 第一次就是已删
+
+    const { result } = renderHook(() => useMessageSending(params));
+
+    await act(async () => {
+      await result.current.handleSend('x');
+    });
+
+    // 既不提交也不开流
+    expect(mockSubmit).not.toHaveBeenCalled();
+    expect(getLastEventSource()).toBeUndefined();
+    expect(result.current.loading).toBe(false);
   });
 });

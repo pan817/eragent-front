@@ -45,6 +45,9 @@ interface UseMessageSendingParams {
   commitSessionFromAnalyze: (session: ApiChatSession) => void;
   /** 当用户未登录时，暂存 query 的回调 */
   onNeedLogin: (query: string) => void;
+  /** 会话是否仍在列表里（未被删除）。handleSend/handleRegenerate 每个 await 后校验，防止
+   *  用户删除 session 时在途的 send 继续给已删除会话注册流导致无法停止。 */
+  isSessionAlive: (id: string) => boolean;
 }
 
 export interface UseMessageSendingReturn {
@@ -59,6 +62,8 @@ export interface UseMessageSendingReturn {
   stopSessionStreams: (sessionId: string) => void;
   /** 清空所有会话时调用，停止全部流 */
   stopAllStreams: () => void;
+  /** 用户主动停止某条进行中的消息：停流 + 把消息标为 error。 */
+  stopStreamForMessage: (assistantMsgId: string) => void;
 }
 
 export function useMessageSending({
@@ -70,6 +75,7 @@ export function useMessageSending({
   ensureRemoteSession,
   commitSessionFromAnalyze,
   onNeedLogin,
+  isSessionAlive,
 }: UseMessageSendingParams): UseMessageSendingReturn {
   // handleRegenerate 需要读最新的 messages 找到目标消息前一条 user 消息；
   // 若直接把 messages 放进 useCallback deps，异步流 SSE 每次事件都会让 handleRegenerate 换引用，
@@ -168,6 +174,37 @@ export function useMessageSending({
     streams.stopAll();
     streamToSessionRef.current.clear();
   }, [streams]);
+
+  // 用户点"停止分析"：定位到消息对应的 traceId / sessionId，停流 + 把气泡标为 error。
+  // 这里直接走 setMessages + unregister，不依赖流的 onError 回调，避免 cleanup 后回调
+  // 已经不触发导致 UI 永远停在 sending。
+  const stopStreamForMessage = useCallback((assistantMsgId: string) => {
+    const msgs = messagesRef.current;
+    const msg = msgs.find(m => m.id === assistantMsgId);
+    if (!msg || !msg.traceId) return;
+    const traceId = msg.traceId;
+    const sid = streamToSessionRef.current.get(traceId) ?? sessionId;
+    streams.stop(traceId);
+    streamToSessionRef.current.delete(traceId);
+    setMessages(
+      prev =>
+        prev.map(m =>
+          m.id === assistantMsgId
+            ? {
+                ...m,
+                content: '已手动停止分析',
+                status: 'error' as const,
+                stageText: undefined,
+                timeline: undefined,
+                degradedToPolling: undefined,
+                resumedAt: undefined,
+              }
+            : m
+        ),
+      sid
+    );
+    stopLoading(sid);
+  }, [streams, setMessages, stopLoading, sessionId]);
 
   // 给 onDone/onError toast 加 session 上下文：如果任务完成时用户已切到别的 session，
   // toast 要告诉他"其他会话"，避免他在当前 session 看到莫名其妙的失败提示。
@@ -443,6 +480,12 @@ export function useMessageSending({
       sendSessionId = realSessionId;
     }
 
+    // await 期间 session 可能已被删除：继续注册流会导致流无法停止（send-then-delete race）
+    if (!isSessionAlive(sendSessionId)) {
+      stopLoading(sendSessionId);
+      return;
+    }
+
     // 2. 构造请求
     const fullQuery = query;
     const effectiveSessionId = realSessionId;
@@ -464,6 +507,11 @@ export function useMessageSending({
     if (USE_ASYNC_ANALYZE) {
       try {
         const ack = await submitAnalyzeAsync(requestBody);
+        // ack 回来时 session 可能已被删除：绝不能再注册流；若依然活着走正常流程
+        if (!isSessionAlive(sendSessionId)) {
+          stopLoading(sendSessionId);
+          return;
+        }
         const realUserId = ack.user_message_id ?? clientUserId;
         const realAssistantId = ack.assistant_message_id ?? clientAssistantId;
         setMessages(
@@ -537,7 +585,7 @@ export function useMessageSending({
     } finally {
       stopLoading(sendSessionId);
     }
-  }, [isSessionBusy, showBusyTip, userId, sessionId, startLoading, stopLoading, setMessages, ensureRemoteSession, commitSessionFromAnalyze, isGuestMode, onNeedLogin, streams, buildStreamHandlers, registerStream]);
+  }, [isSessionBusy, showBusyTip, userId, sessionId, startLoading, stopLoading, setMessages, ensureRemoteSession, commitSessionFromAnalyze, isGuestMode, onNeedLogin, streams, buildStreamHandlers, registerStream, isSessionAlive]);
 
   // ---- handleRegenerate ----
   const handleRegenerate = useCallback(
@@ -588,6 +636,12 @@ export function useMessageSending({
           regenSessionId = realSessionId;
         }
 
+        // await 期间 session 可能已被删除，参见 handleSend 同名检查
+        if (!isSessionAlive(regenSessionId)) {
+          stopLoading(regenSessionId);
+          return;
+        }
+
         const requestBody = {
           query: userMsg.content,
           user_id: userId ?? '',
@@ -600,6 +654,10 @@ export function useMessageSending({
         if (USE_ASYNC_ANALYZE) {
           try {
             const ack = await submitAnalyzeAsync(requestBody);
+            if (!isSessionAlive(regenSessionId)) {
+              stopLoading(regenSessionId);
+              return;
+            }
             const realAssistantId = ack.assistant_message_id ?? assistantMsgId;
             setMessages(
               prev =>
@@ -672,7 +730,7 @@ export function useMessageSending({
       })();
     },
     // messages 通过 messagesRef 读，不进 deps —— 避免 SSE 事件打穿 MessageBubble 的 memo
-    [isSessionBusy, showBusyTip, sessionId, startLoading, stopLoading, setMessages, userId, ensureRemoteSession, commitSessionFromAnalyze, isGuestMode, streams, buildStreamHandlers, registerStream]
+    [isSessionBusy, showBusyTip, sessionId, startLoading, stopLoading, setMessages, userId, ensureRemoteSession, commitSessionFromAnalyze, isGuestMode, streams, buildStreamHandlers, registerStream, isSessionAlive]
   );
 
   return {
@@ -684,5 +742,6 @@ export function useMessageSending({
     busySessions,
     stopSessionStreams,
     stopAllStreams,
+    stopStreamForMessage,
   };
 }

@@ -159,6 +159,8 @@ export interface UseChatSessionsReturn {
   commitSessionFromAnalyze: (apiSession: ApiChatSession) => void;
   /** 重命名会话标题（乐观更新 + 调后端 PATCH）；设 titleAuto=false 防止后端自动覆盖 */
   renameSession: (id: string, newTitle: string) => void;
+  /** 会话是否仍在列表里（未被删除）。发消息链路用它在每个 await 后校验，避免给已删除的会话注册流。 */
+  isSessionAlive: (id: string) => boolean;
 }
 
 // ============================================
@@ -281,6 +283,12 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
   const currentSession = useMemo(
     () => sessions.find(s => s.id === currentId) ?? sessions[0] ?? makeEmptySession(),
     [sessions, currentId]
+  );
+
+  // 发消息链路在 await 后调用，避免给已被删除的 session 启动流（send-then-delete race）
+  const isSessionAlive = useCallback(
+    (id: string) => sessionsRef.current.some(s => s.id === id),
+    []
   );
 
   // ============================================
@@ -616,6 +624,7 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
     ensureRemoteSession,
     commitSessionFromAnalyze,
     renameSession,
+    isSessionAlive,
   };
 }
 

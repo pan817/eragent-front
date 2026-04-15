@@ -44,6 +44,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
     renameSession,
     isGuestMode,
     detailLoading,
+    isSessionAlive,
   } = useChatSessions(userId);
 
   const [activeTraceId, setActiveTraceId] = useState<string | null>(null);
@@ -71,6 +72,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
     busySessions,
     stopSessionStreams,
     stopAllStreams,
+    stopStreamForMessage,
   } = useMessageSending({
     userId,
     sessionId: currentId,
@@ -80,6 +82,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
     ensureRemoteSession,
     commitSessionFromAnalyze,
     onNeedLogin,
+    isSessionAlive,
   });
 
   // 删会话 / 清空前必须先停掉对应的异步分析流，否则 EventSource + 降级轮询会在后台空转，
@@ -286,6 +289,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
               userId={userId}
               onTraceClick={setActiveTraceId}
               onRegenerate={handleRegenerate}
+              onStop={stopStreamForMessage}
             />
           ))}
           <div ref={messagesEndRef} />

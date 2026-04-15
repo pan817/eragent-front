@@ -90,6 +90,56 @@ describe('MessageBubble — assistant message', () => {
     vi.useRealTimers()
   })
 
+  it('elapsed interval is cleared on unmount (no setState-after-unmount warning)', () => {
+    vi.useFakeTimers()
+    const msg = makeMsg({ status: 'sending', content: '', timestamp: new Date() })
+    const { unmount } = render(<MessageBubble message={msg} />)
+
+    unmount()
+
+    // 卸载后再推进时钟，若 clearInterval 没生效会触发 React "setState on unmounted"
+    // 走不到任何断言，这里靠 console.error spy 捕捉潜在警告
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    act(() => { vi.advanceTimersByTime(5000) })
+    expect(errSpy).not.toHaveBeenCalled()
+    errSpy.mockRestore()
+
+    vi.useRealTimers()
+  })
+
+  it('shows stop button when status=sending and onStop provided', () => {
+    const onStop = vi.fn()
+    const msg = makeMsg({ status: 'sending', content: '' })
+    render(<MessageBubble message={msg} onStop={onStop} />)
+
+    const stopBtn = screen.getByRole('button', { name: '停止分析' })
+    expect(stopBtn).toBeInTheDocument()
+  })
+
+  it('does not show stop button when status != sending', () => {
+    const onStop = vi.fn()
+    const msg = makeMsg({ status: 'success' })
+    render(<MessageBubble message={msg} onStop={onStop} />)
+
+    expect(screen.queryByRole('button', { name: '停止分析' })).not.toBeInTheDocument()
+  })
+
+  it('does not show stop button when onStop not provided', () => {
+    const msg = makeMsg({ status: 'sending', content: '' })
+    render(<MessageBubble message={msg} />)
+
+    expect(screen.queryByRole('button', { name: '停止分析' })).not.toBeInTheDocument()
+  })
+
+  it('calls onStop with message id when stop clicked', () => {
+    const onStop = vi.fn()
+    const msg = makeMsg({ id: 'a-7', status: 'sending', content: '' })
+    render(<MessageBubble message={msg} onStop={onStop} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '停止分析' }))
+    expect(onStop).toHaveBeenCalledWith('a-7')
+  })
+
   it('renders error block for error status', () => {
     const msg = makeMsg({ status: 'error', content: '服务器错误' })
     render(<MessageBubble message={msg} />)

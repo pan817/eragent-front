@@ -126,6 +126,8 @@ export interface ChatMessage {
   lastChunkIndex?: number;
   /** LLM 流式输出：检测到 chunk gap（index 非连续）。需等 done 拉快照覆盖，不再信任 chunkBuffer。 */
   chunkBroken?: boolean;
+  /** 用户主动停止生成。status='success' + aborted=true 时，气泡保留已生成内容并在脚注显示"已停止生成"。 */
+  aborted?: boolean;
 }
 
 /** 气泡折叠时间线里的一行（只保留 stage 和 tool 事件，heartbeat 忽略） */

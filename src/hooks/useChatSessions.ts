@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import {
   ApiError,
   type ApiChatSession,
@@ -170,7 +170,7 @@ export interface UseChatSessionsReturn {
 export function useChatSessions(userId: string | null): UseChatSessionsReturn {
   // 登录态跑 online，未登录 / 失败降级 guest
   const [isGuestMode, setIsGuestMode] = useState(() => userId === null);
-  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+  const [sessions, setSessionsRaw] = useState<ChatSession[]>(() => {
     if (userId === null) {
       const local = loadLocal();
       return local.sessions;
@@ -192,6 +192,29 @@ export function useChatSessions(userId: string | null): UseChatSessionsReturn {
   currentIdRef.current = currentId;
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
+  /**
+   * setSessions 的包装：在 React 的 setState 之外，同步更新 sessionsRef。
+   *
+   * 为什么要这样做：sessionsRef 的"兜底写入"在 render body，只有组件重渲染后才同步。
+   * 但 `await` 之后的微任务延续会在 React 渲染前运行——典型场景：
+   *   ensureRemoteSession 成功 → setSessions(temp→real) → return real.id
+   *   handleSend 继续 → isSessionAlive(real.id) → 读 sessionsRef → 仍是 temp 列表 → 误报不存活 → 静默丢弃请求
+   * 包装 setSessions，让它在 updater 里同步写 ref，消除 render 时差。
+   * 对 React 的行为完全无侵入：updater 仍是纯函数（幂等赋值同一 next 值）。
+   */
+  const setSessions = useCallback<Dispatch<SetStateAction<ChatSession[]>>>(
+    updater => {
+      setSessionsRaw(prev => {
+        const next =
+          typeof updater === 'function'
+            ? (updater as (p: ChatSession[]) => ChatSession[])(prev)
+            : updater;
+        sessionsRef.current = next;
+        return next;
+      });
+    },
+    []
+  );
   const detailLoadedRef = useRef<Set<string>>(new Set());
   // 并发保护：同一个 temp id 多次调用 ensureRemoteSession 复用同一个 promise
   const pendingEnsureRef = useRef<Map<string, Promise<string>>>(new Map());

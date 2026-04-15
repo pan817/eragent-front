@@ -212,6 +212,23 @@
   box-shadow: none;
 }
 
+/* 流式中按钮变"停止"形态：深色方块，占位与发送按钮一致不跳动 */
+.send-btn.send-btn--stop {
+  background: #1e293b;
+  color: #fff;
+  cursor: pointer;
+}
+
+.send-btn.send-btn--stop:hover {
+  background: #0f172a;
+  transform: translateY(-1px) scale(1.05);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.35);
+}
+
+.send-btn.send-btn--stop:active {
+  transform: translateY(0) scale(0.95);
+}
+
 /* ---------- Generic spinner ---------- */
 .spinner {
   width: 14px;

@@ -39,23 +39,23 @@ export default function TraceSummary({ data, budgetWarningThreshold }: Props) {
             <div className="summary-item">
               <div className="summary-label">Peak Prompt</div>
               <div className="summary-value">
-                {data.token_summary.peak_prompt_tokens.toLocaleString()}
+                {(data.token_summary.peak_prompt_tokens ?? 0).toLocaleString()}
               </div>
             </div>
             <div className="summary-item">
               <div className="summary-label">Total Tokens</div>
               <div className="summary-value">
-                {(data.token_summary.total_prompt_tokens + data.token_summary.total_completion_tokens).toLocaleString()}
+                {((data.token_summary.total_prompt_tokens ?? 0) + (data.token_summary.total_completion_tokens ?? 0)).toLocaleString()}
               </div>
             </div>
             {data.token_summary.context_budget && (
               <div className="summary-item">
                 <div className="summary-label">Budget 使用率</div>
                 <div className={`summary-value ${
-                  data.token_summary.context_budget.budget_usage_pct >= budgetWarningThreshold
+                  (data.token_summary.context_budget.budget_usage_pct ?? 0) >= budgetWarningThreshold
                     ? 'token-danger' : ''
                 }`}>
-                  {data.token_summary.context_budget.budget_usage_pct.toFixed(1)}
+                  {(data.token_summary.context_budget.budget_usage_pct ?? 0).toFixed(1)}
                   <span className="summary-unit">%</span>
                 </div>
               </div>

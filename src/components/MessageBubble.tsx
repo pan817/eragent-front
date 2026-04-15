@@ -130,12 +130,12 @@ function LoadingStages({
         {onStop && (
           <button
             type="button"
-            className="loading-stop"
+            className="loading-cancel"
             onClick={onStop}
-            aria-label="停止分析"
-            title="停止分析"
+            aria-label="取消分析"
+            title="取消分析"
           >
-            停止
+            取消
           </button>
         )}
       </div>
@@ -279,7 +279,6 @@ h1,h2,h3{margin-top:24px;margin-bottom:8px}
               <StreamingText
                 text={message.chunkBuffer ?? ''}
                 broken={message.chunkBroken}
-                onStop={onStop ? () => onStop(message.id) : undefined}
               />
             </Suspense>
           ) : message.status === 'sending' ? (
@@ -334,6 +333,25 @@ h1,h2,h3{margin-top:24px;margin-bottom:8px}
             </Suspense>
           )}
         </div>
+
+        {!isUser && message.status === 'success' && message.aborted && (
+          <div className="aborted-footnote" role="note">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <rect x="9" y="9" width="6" height="6" />
+            </svg>
+            <span>已停止生成</span>
+            {onRegenerate && (
+              <button
+                type="button"
+                className="aborted-regen"
+                onClick={() => onRegenerate(message.id)}
+              >
+                重新生成
+              </button>
+            )}
+          </div>
+        )}
 
         {!isUser && message.status === 'success' && (
           <div className="message-toolbar">

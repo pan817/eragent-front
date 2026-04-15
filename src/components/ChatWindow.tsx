@@ -127,6 +127,17 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
     [handleSend]
   );
 
+  // 输入栏"发送→停止"按钮需要定位到当前 session 的进行中消息。
+  // 取最后一条 status='sending' 的 assistant 消息（并发场景下停止最新一条；
+  // 更老的可通过气泡 stage 区的"取消"链接单独停止）。
+  const activeAssistantMsgId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === 'assistant' && m.status === 'sending' && m.traceId) return m.id;
+    }
+    return null;
+  }, [messages]);
+
   const liveStatus = useMemo(() => {
     if (loading) return '正在分析中...';
     const last = messages[messages.length - 1];
@@ -316,6 +327,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
           draftText={draft.text}
           onOpenExamples={() => setExamplesOpen(true)}
           onOpenTips={() => setTipsOpen(true)}
+          onStop={activeAssistantMsgId ? () => stopStreamForMessage(activeAssistantMsgId) : undefined}
         />
       </main>
 

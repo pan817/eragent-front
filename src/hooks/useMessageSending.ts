@@ -189,23 +189,41 @@ export function useMessageSending({
     streamToSessionRef.current.delete(traceId);
     setMessages(
       prev =>
-        prev.map(m =>
-          m.id === assistantMsgId
-            ? {
-                ...m,
-                content: '已手动停止分析',
-                status: 'error' as const,
-                stageText: undefined,
-                timeline: undefined,
-                degradedToPolling: undefined,
-                resumedAt: undefined,
-                streaming: undefined,
-                chunkBuffer: undefined,
-                lastChunkIndex: undefined,
-                chunkBroken: undefined,
-              }
-            : m
-        ),
+        prev.map(m => {
+          if (m.id !== assistantMsgId) return m;
+          // 已流出部分内容时保留它（用户主动停止 ≠ 失败，避免"已读的内容突然消失"）。
+          // 没有任何内容时退回 error 分支，和原先一致。
+          const hasPartial = !!(m.streaming && m.chunkBuffer && m.chunkBuffer.length > 0);
+          if (hasPartial) {
+            return {
+              ...m,
+              content: m.chunkBuffer!,
+              status: 'success' as const,
+              aborted: true,
+              stageText: undefined,
+              timeline: undefined,
+              degradedToPolling: undefined,
+              resumedAt: undefined,
+              streaming: undefined,
+              chunkBuffer: undefined,
+              lastChunkIndex: undefined,
+              chunkBroken: undefined,
+            };
+          }
+          return {
+            ...m,
+            content: '已手动停止分析',
+            status: 'error' as const,
+            stageText: undefined,
+            timeline: undefined,
+            degradedToPolling: undefined,
+            resumedAt: undefined,
+            streaming: undefined,
+            chunkBuffer: undefined,
+            lastChunkIndex: undefined,
+            chunkBroken: undefined,
+          };
+        }),
       sid
     );
     stopLoading(sid);

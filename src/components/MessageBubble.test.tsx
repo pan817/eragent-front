@@ -112,7 +112,7 @@ describe('MessageBubble — assistant message', () => {
     const msg = makeMsg({ status: 'sending', content: '' })
     render(<MessageBubble message={msg} onStop={onStop} />)
 
-    const stopBtn = screen.getByRole('button', { name: '停止分析' })
+    const stopBtn = screen.getByRole('button', { name: '取消分析' })
     expect(stopBtn).toBeInTheDocument()
   })
 
@@ -121,14 +121,14 @@ describe('MessageBubble — assistant message', () => {
     const msg = makeMsg({ status: 'success' })
     render(<MessageBubble message={msg} onStop={onStop} />)
 
-    expect(screen.queryByRole('button', { name: '停止分析' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '取消分析' })).not.toBeInTheDocument()
   })
 
   it('does not show stop button when onStop not provided', () => {
     const msg = makeMsg({ status: 'sending', content: '' })
     render(<MessageBubble message={msg} />)
 
-    expect(screen.queryByRole('button', { name: '停止分析' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '取消分析' })).not.toBeInTheDocument()
   })
 
   it('calls onStop with message id when stop clicked', () => {
@@ -136,7 +136,7 @@ describe('MessageBubble — assistant message', () => {
     const msg = makeMsg({ id: 'a-7', status: 'sending', content: '' })
     render(<MessageBubble message={msg} onStop={onStop} />)
 
-    fireEvent.click(screen.getByRole('button', { name: '停止分析' }))
+    fireEvent.click(screen.getByRole('button', { name: '取消分析' }))
     expect(onStop).toHaveBeenCalledWith('a-7')
   })
 

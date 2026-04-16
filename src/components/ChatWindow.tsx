@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChatSessions } from '../hooks/useChatSessions';
 import { useMessageSending } from '../hooks/useMessageSending';
 import MessageBubble from './MessageBubble';
 import InputBar, { type SendOptions } from './InputBar';
-const TraceModal = lazy(() => import('./TraceModal'));
+import TraceModal from './TraceModal';
 import Login from './Login';
 import Sidebar from './Sidebar';
 import FeedbackButton from './FeedbackButton';
@@ -343,13 +343,11 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
       <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       {activeTraceId && (
-        <Suspense fallback={null}>
-          <TraceModal
-            traceId={activeTraceId}
-            onClose={() => setActiveTraceId(null)}
-            sessionTraceIds={sessionTraceIds}
-          />
-        </Suspense>
+        <TraceModal
+          traceId={activeTraceId}
+          onClose={() => setActiveTraceId(null)}
+          sessionTraceIds={sessionTraceIds}
+        />
       )}
 
       {showLogin && (

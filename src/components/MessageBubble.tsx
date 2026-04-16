@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, memo, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, memo } from 'react';
 import './MessageBubble.css';
 import type { ChatMessage, AnalysisTimelineEntry } from '../types/api';
 import Avatar from './Avatar';
@@ -6,15 +6,14 @@ import { formatRelativeTime } from '../utils/format';
 import { getTypicalDurationMs } from '../utils/analysisDurationHistory';
 import { escapeHtml } from '../utils/html';
 import { showToast } from '../utils/toast';
+import MarkdownContent from './MarkdownContent';
+import StreamingText from './StreamingText';
 
 /** 这些错误码重试只会再失败；不显示"重试"按钮，改为"换个问法"提示。 */
 const RETRY_FORBIDDEN_CODES = new Set(['INTENT_UNCLEAR', 'NO_DATA']);
 
 /** resumedAt 后横幅展示时长 */
 const RESUME_BANNER_DURATION_MS = 3000;
-
-const MarkdownContent = lazy(() => import('./MarkdownContent'));
-const StreamingText = lazy(() => import('./StreamingText'));
 
 interface Props {
   message: ChatMessage;
@@ -262,12 +261,10 @@ h1,h2,h3{margin-top:24px;margin-bottom:8px}
             <p className="user-text">{message.content}</p>
           ) : message.status === 'sending' && message.streaming ? (
             // LLM token 流式打字机：首 chunk 到达后走这条分支，done 后 applySnapshot 切到 markdown
-            <Suspense fallback={<div className="markdown-body markdown-body--loading" aria-hidden="true" />}>
-              <StreamingText
-                text={message.chunkBuffer ?? ''}
-                broken={message.chunkBroken}
-              />
-            </Suspense>
+            <StreamingText
+              text={message.chunkBuffer ?? ''}
+              broken={message.chunkBroken}
+            />
           ) : message.status === 'sending' ? (
             <LoadingStages
               stageText={message.stageText}
@@ -315,9 +312,7 @@ h1,h2,h3{margin-top:24px;margin-bottom:8px}
               )}
             </div>
           ) : (
-            <Suspense fallback={<div className="markdown-body markdown-body--loading" aria-hidden="true" />}>
-              <MarkdownContent content={message.content} />
-            </Suspense>
+            <MarkdownContent content={message.content} />
           )}
         </div>
 

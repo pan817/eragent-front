@@ -107,13 +107,12 @@ describe('MessageBubble — assistant message', () => {
     vi.useRealTimers()
   })
 
-  it('shows stop button when status=sending and onStop provided', () => {
+  it('does not show stop button in bubble (stop is now in InputBar)', () => {
     const onStop = vi.fn()
     const msg = makeMsg({ status: 'sending', content: '' })
-    render(<MessageBubble message={msg} onStop={onStop} />)
+    render(<MessageBubble message={msg} />)
 
-    const stopBtn = screen.getByRole('button', { name: '取消分析' })
-    expect(stopBtn).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '取消分析' })).not.toBeInTheDocument()
   })
 
   it('does not show stop button when status != sending', () => {
@@ -131,13 +130,11 @@ describe('MessageBubble — assistant message', () => {
     expect(screen.queryByRole('button', { name: '取消分析' })).not.toBeInTheDocument()
   })
 
-  it('calls onStop with message id when stop clicked', () => {
-    const onStop = vi.fn()
+  it('does not render cancel button in bubble even for sending messages', () => {
     const msg = makeMsg({ id: 'a-7', status: 'sending', content: '' })
-    render(<MessageBubble message={msg} onStop={onStop} />)
+    render(<MessageBubble message={msg} />)
 
-    fireEvent.click(screen.getByRole('button', { name: '取消分析' }))
-    expect(onStop).toHaveBeenCalledWith('a-7')
+    expect(screen.queryByRole('button', { name: '取消分析' })).not.toBeInTheDocument()
   })
 
   it('renders error block for error status', () => {

@@ -281,3 +281,117 @@ curl -s "http://localhost:3000/api/v1/ptp-agent/analyze/tasks/$TID" | jq
   - [ ] `event: done` 后立即查快照，`status` 能立刻看到 `ok` / `error` / `aborted`
   - [ ] `result.report_markdown` 非空
   - [ ] Network 面板里只有一次 `GET /analyze/tasks/{id}` 请求（没有重试）
+
+---
+
+# Issue 3：聊天消息终态不固化，刷新后前端循环重订阅 SSE
+
+> 报告时间：2026-04-16
+> 报告人：前端
+> 影响接口：
+>   - `GET /api/v1/ptp-agent/sessions/{session_id}`（会话详情 — 聊天消息的 `status` 字段）
+>   - `GET /api/v1/ptp-agent/analyze/tasks/{trace_id}/events`（被刷新重复订阅）
+> 严重程度：**中高** —— 用户侧表现为"任务已经失败/终结，但刷新后气泡又回到'分析中'"的循环；
+> 同时造成 SSE/快照接口被重复打开，资源浪费
+> 状态：前端已做兜底（resume 时先查快照，见本 issue §3），但根因在后端
+
+## 1. 现象
+
+1. 用户提交一次异步分析，任务在后端最终走到 `error` / `aborted` / `ok` 终态。
+2. 用户刷新或切回该会话。
+3. 浏览器 Network 里**仍然看到**：
+   - `GET /sessions/{sid}` 返回的消息里，assistant 消息的 `status` 字段是 `"pending"`；
+   - 紧接着 `GET /analyze/tasks/{trace_id}/events` 被再次打开一条 SSE 连接；
+   - 气泡从"已失败"重新变成"正在分析"。
+4. 用户再刷新一次，同样的两条请求再来一轮，无穷循环。
+
+## 2. 问题定位
+
+### 2.1 `chat_messages.status` 停留在 `pending`
+
+按 [docs/chat_history_api_design.md §2](./chat_history_api_design.md) 与 §7 流程："经 `/analyze` 完成后后端固化为 `success` 或 `error`。若是刷新页面后从后端拉的消息，理论上不会再看到 `sending`"。
+
+实际观察：任务已经在 TaskRegistry 视角走到终态（snapshot `GET /analyze/tasks/{trace_id}` 返回 `status=error`/`ok`/`aborted`），但 `chat_messages` 表里对应那条 assistant 消息的 `status` 仍然是 `pending`。
+
+### 2.2 可能的后端原因（按优先级排序）
+
+#### P0 —— 任务终态收尾漏写 `chat_messages.status`
+
+任务完成/失败/中止时，后端的收尾逻辑需要**同时**做两件事：
+1. 更新 TaskRegistry 里的快照状态（`GET /analyze/tasks/{id}` 看到的那份）
+2. 更新 `chat_messages` 表里那条 assistant 消息：
+   - 成功 → `{status: 'success', content: report_markdown, duration_ms, trace_id}`
+   - 失败 → `{status: 'error', content: 错误消息或占位, duration_ms, trace_id}`
+   - 中止 → `{status: 'error', content: '已中止', duration_ms}`（或按产品约定）
+
+目前怀疑后端**只更新了 1**，漏了 2；或者 2 走在一个可能异常的独立事务里没被兜住。
+
+请检查：
+- 任务收尾代码路径里有没有 `UPDATE chat_messages SET status = ... WHERE id = assistant_message_id` 这一条？
+- 这条 UPDATE 是不是和快照状态更新在同一个事务 / 同一个原子单元里？
+- 异常路径（LLM error / timeout / worker panic）是不是走了同样的收尾？还是短路跳过了？
+
+#### P1 —— worker 崩溃后没有"孤儿任务"扫描
+
+即便 P0 修好，仍有一类极端情况会留下 pending：进程被 kill / OOM / 容器驱逐，收尾代码根本没机会执行。
+
+建议加一个后端定时任务：扫描 `chat_messages.status='pending'` 且 `created_at` 超过某个阈值（比如 30 分钟）的消息，按对应 trace 的最终状态补写 `status` / `content`。如果 trace 也没有终态记录，直接标 `error` + "分析异常中止"。
+
+#### P2 —— 重新生成 (`regenerate_of`) 路径的终态落地
+
+`regenerate_of` 场景下是 PATCH 已有的 assistant 消息，不是插入新消息。请确认 regenerate 失败时同样会把 `status` 改回 `error`，而不是保留上一版的 `success` 或停在 `pending`。
+
+### 2.3 前端为何不能自己把 `status` 改回 `error`
+
+前端 `onError` 当下只在内存里把气泡标为 `status='error'`，**不 PATCH 后端**。理由：
+
+- 前端的"失败"判断来源多样（SSE 断连、15 分钟全局超时、熔断），**并不等价于任务真的失败**。后端任务可能还在跑，前端只是看不到。
+- 前端如果强行 PATCH `status='error'`，会和后端真正的终态更新产生写写竞争：前端先写 error → 后端紧接着写 success，最终用户看到哪一版取决于时序，不可控。
+- `chat_messages.status` 的真相应由后端任务生命周期维护，这是不变量，不能倒置。
+
+所以前端坚持**只读**这个字段，要求后端保证它在任务终结后必然落成 success / error。
+
+## 3. 前端侧已实施的兜底（方案 B）
+
+**改动**：[src/hooks/useMessageSending.ts](../src/hooks/useMessageSending.ts) 的 resume effect（刷新/切会话后重连 SSE 的那段）。
+
+**策略**：
+
+1. 扫到 `status='sending'` 且有 `traceId` 的消息时，**先**调 `GET /analyze/tasks/{trace_id}` 拿 snapshot。
+2. snapshot 的 `status` 是 `ok` / `error` / `aborted` → 直接调用 `applySnapshotToMessage` 把气泡落到终态，**不开 SSE**。
+3. snapshot 的 `status` 是 `running` / `queued` → 才真正开 SSE（原路径）。
+4. snapshot 请求失败（网络错）→ 退回到原路径开 SSE，交给流自身的 watchdog / 熔断兜底。这一步是刻意保守，避免"一次网络抖动让用户的在途任务永久失联"。
+
+**效果**：
+
+- 后端即使继续留 `chat_messages.status='pending'`，只要快照接口能吐出终态，前端刷新就不会再打开 SSE，循环消失。
+- 用户看到的气泡从"正在分析"变成最终的成功/失败形态，数据一致。
+
+**代价**：
+
+- 每次刷新对每条 pending 消息多打一次 `GET /analyze/tasks/{id}` 请求。对一屏几十条聊天来说成本可忽略。
+- 如果后端 snapshot 接口也停留在 `running`（即 Issue 2 描述的那种滞后），前端仍然会开 SSE，属于双侧故障的退化场景，不在本 issue 范围。
+
+**这个兜底不替代后端修复**。snapshot 接口和 chat_messages 表是两条独立的信息通路；B 只解决了"前端读 chat_messages 读到假 pending"这一个观感问题，不能让其他依赖 `chat_messages.status` 的后端流程（列表、统计、清理、导出）看到正确的数据。
+
+## 4. 验证方法
+
+### 4.1 手动复现
+
+1. 触发一次必然失败的异步分析（比如构造一个后端会报 LLM_ERROR 的 query）。
+2. 等前端气泡变红、显示"分析失败"。
+3. 直接查数据库或 `GET /sessions/{sid}`，看对应 assistant 消息的 `status` 字段：
+   - 期望：`"error"`
+   - 实际（bug 存在时）：`"pending"`
+
+### 4.2 验收标准
+
+- [ ] 任务走到 `error` / `aborted` 终态后，`chat_messages.status` 在 **≤ 1 秒内** 变成 `"error"`
+- [ ] 任务成功后，`chat_messages.status` 变成 `"success"` 且 `content = report_markdown`
+- [ ] P1 扫描任务上线后，对刻意杀掉 worker 造出的 `pending` 消息，能在扫描周期内补成 `error`
+- [ ] 前端 Network 面板：刷新带有已完成/失败消息的会话时，不再看到 `GET /analyze/tasks/{id}/events` 请求（只会看到一次 `GET /analyze/tasks/{id}` 的 snapshot 预检）
+
+## 5. 联系人 / 后续
+
+- 后端修复后请在此文档末尾追加修复说明（改了哪些文件 / 变更的 commit hash）
+- 修复上线后前端可考虑把 snapshot 预检改为"仅在诊断开关打开时生效"或完全移除，回归到直接开 SSE 的原始路径（但建议保留 —— 它同时也修掉了"关标签页时任务刚好完成但前端没来得及拿结果"的一类竞态，代价很低）

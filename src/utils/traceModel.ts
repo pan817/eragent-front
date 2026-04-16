@@ -75,18 +75,48 @@ const USAGE_META_RE =
 const TOKEN_USAGE_RE =
   /token_usage['"]: \{['"]completion_tokens['"]: (\d+),\s*['"]prompt_tokens['"]: (\d+),\s*['"]total_tokens['"]: (\d+)/;
 
+/**
+ * 把后端返回的 usage 对象归一化成 ModelUsage。
+ * 兼容 Anthropic 风格 (input_tokens/output_tokens) 和 OpenAI 风格 (prompt_tokens/completion_tokens)。
+ * 字段缺失或类型不符则返回 null，让调用方降级到正则/估算路径，
+ * 避免下游 `.toLocaleString()` 读到 undefined 崩溃。
+ */
+function toModelUsage(u: Record<string, unknown>): ModelUsage | null {
+  if (
+    typeof u.input_tokens === 'number' &&
+    typeof u.output_tokens === 'number' &&
+    typeof u.total_tokens === 'number'
+  ) {
+    return u as unknown as ModelUsage;
+  }
+  if (
+    typeof u.prompt_tokens === 'number' &&
+    typeof u.completion_tokens === 'number' &&
+    typeof u.total_tokens === 'number'
+  ) {
+    return {
+      input_tokens: u.prompt_tokens,
+      output_tokens: u.completion_tokens,
+      total_tokens: u.total_tokens,
+    };
+  }
+  return null;
+}
+
 export function extractModelUsage(
   attrs: Record<string, unknown>,
 ): { usage: ModelUsage | null; estimated: boolean } {
   // 路径1a: 结构化 attributes.usage（DAG 路由）
   if (attrs.usage && typeof attrs.usage === 'object') {
-    return { usage: attrs.usage as ModelUsage, estimated: false };
+    const usage = toModelUsage(attrs.usage as Record<string, unknown>);
+    if (usage) return { usage, estimated: false };
   }
 
   // 路径1b: 结构化 attributes.output.usage（新版后端格式）
   const output = attrs.output as Record<string, unknown> | undefined;
   if (output && typeof output === 'object' && output.usage && typeof output.usage === 'object') {
-    return { usage: output.usage as ModelUsage, estimated: false };
+    const usage = toModelUsage(output.usage as Record<string, unknown>);
+    if (usage) return { usage, estimated: false };
   }
 
   // 路径2: 从 output.content 字符串中正则提取

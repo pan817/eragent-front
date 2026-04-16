@@ -7,7 +7,7 @@ import type {
   TaskSnapshot,
 } from '../types/api';
 import { ApiError } from '../types/api';
-import { analyzeQuery, submitAnalyzeAsync } from '../services/api';
+import { analyzeQuery, submitAnalyzeAsync, fetchTaskSnapshot } from '../services/api';
 import { USE_ASYNC_ANALYZE } from '../services/constants';
 import { useAnalysisStreams } from './useAnalysisStream';
 import { errorMainText, tryErrorMainText } from '../utils/analysisErrorText';
@@ -462,6 +462,15 @@ export function useMessageSending({
   const resumedTracesRef = useRef<Set<string>>(new Set());
 
   // ---- 刷新/切会话后恢复订阅：对 status='sending' 且有 traceId 的消息重连 ----
+  //
+  // 后端 chat_messages.status 在任务真正终结后应固化为 success/error，但实际存在滞留
+  // pending 的情况（worker 崩溃、终态 publish 漏写、落库滞后等，见
+  // docs/async_analyze_backend_issue.md Issue 3）。不加保护的话，每次刷新都会把已终结任务
+  // 当成"还在跑"重订阅一次 SSE，形成循环。
+  //
+  // 这里在 streams.start 之前强制查一次 snapshot：任务已经终态就直接把气泡落到终态，
+  // 不再开 SSE；仍在 running/queued 才真的订阅。fetchTaskSnapshot 失败时走原路径开
+  // SSE（交给流自身的 watchdog / 熔断兜底），避免一次网络抖动让用户的在途任务永久失联。
   useEffect(() => {
     if (!USE_ASYNC_ANALYZE) return;
     for (const m of messages) {
@@ -471,18 +480,46 @@ export function useMessageSending({
       if (resumedTracesRef.current.has(m.traceId)) continue;
       if (streams.isActive(m.traceId)) continue;
       resumedTracesRef.current.add(m.traceId);
-      startLoading(sessionId);
-      // 打 resumedAt 标记让气泡展示"已恢复未完成的分析"横幅（自动淡出）
-      const resumedAt = Date.now();
-      setMessages(
-        prev =>
-          prev.map(msg => (msg.id === m.id ? { ...msg, resumedAt } : msg)),
-        sessionId
-      );
-      registerStream(m.traceId, sessionId);
-      streams.start(m.traceId, buildStreamHandlers(m.id, sessionId));
+      const traceId = m.traceId;
+      const msgId = m.id;
+      const sid = sessionId;
+      startLoading(sid);
+      (async () => {
+        let snap: TaskSnapshot | null = null;
+        try {
+          snap = await fetchTaskSnapshot(traceId);
+        } catch {
+          // 快照取不到：走原路径开 SSE，不在这里做重试
+        }
+        if (
+          snap &&
+          (snap.status === 'ok' || snap.status === 'error' || snap.status === 'aborted')
+        ) {
+          applySnapshotToMessage(msgId, sid, snap);
+          stopLoading(sid);
+          return;
+        }
+        // 非终态：真开 SSE，打 resumedAt 横幅让用户看到"已恢复未完成的分析"
+        const resumedAt = Date.now();
+        setMessages(
+          prev => prev.map(msg => (msg.id === msgId ? { ...msg, resumedAt } : msg)),
+          sid
+        );
+        registerStream(traceId, sid);
+        streams.start(traceId, buildStreamHandlers(msgId, sid));
+      })();
     }
-  }, [messages, sessionId, streams, buildStreamHandlers, startLoading, setMessages, registerStream]);
+  }, [
+    messages,
+    sessionId,
+    streams,
+    buildStreamHandlers,
+    startLoading,
+    stopLoading,
+    setMessages,
+    registerStream,
+    applySnapshotToMessage,
+  ]);
 
   // ---- handleSend ----
   const handleSend = useCallback(async (query: string, options: SendOptions = DEFAULT_SEND_OPTIONS) => {

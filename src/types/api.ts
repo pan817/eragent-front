@@ -319,12 +319,14 @@ export interface StatusEvent extends BaseEvent {
 export interface StageEvent extends BaseEvent {
   type: 'stage';
   name: string;
+  label?: string;
   attrs?: Record<string, unknown>;
 }
 export interface ToolEvent extends BaseEvent {
   type: 'tool';
   action: 'start' | 'end';
   name: string;
+  label?: string;
   duration_ms?: number;
   status?: string;
 }
@@ -332,6 +334,7 @@ export interface DagTaskEvent extends BaseEvent {
   type: 'dag_task';
   action: 'start' | 'end';
   task_name: string;
+  label?: string;
   duration_ms?: number;
   status?: string;
 }

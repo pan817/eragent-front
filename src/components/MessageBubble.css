@@ -264,26 +264,7 @@
   background: var(--surface-hover, rgba(0, 0, 0, 0.04));
 }
 
-/* 输入栏的发送按钮流式中会变停止按钮，这里只保留一个低调的"取消"文字链作为兜底入口 */
-.loading-cancel {
-  margin-left: 8px;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 2px 4px;
-  font-size: 12px;
-  line-height: 1.4;
-  text-decoration: underline;
-  text-decoration-color: transparent;
-  text-underline-offset: 2px;
-  transition: color 0.15s, text-decoration-color 0.15s;
-}
-
-.loading-cancel:hover {
-  color: #b42318;
-  text-decoration-color: #b42318;
-}
+/* 停止入口已统一收敛到 InputBar，loading-cancel 不再使用 */
 
 .aborted-footnote {
   display: inline-flex;

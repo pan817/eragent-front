@@ -647,8 +647,9 @@ export default function InputBar({
               aria-label="停止生成"
               title="停止生成"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                <rect x="6" y="6" width="12" height="12" rx="1.5" />
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none" />
               </svg>
             </button>
           ) : (

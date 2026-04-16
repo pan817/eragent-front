@@ -19,6 +19,12 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[ErrorBoundary]', error, info.componentStack);
+
+    // CSS/JS 预加载失败（如部署更新后旧 chunk 不存在），自动刷新一次
+    if (error.message?.includes('Unable to preload') || error.message?.includes('Failed to fetch dynamically imported module')) {
+      window.location.reload();
+      return;
+    }
   }
 
   handleReset = () => {

@@ -342,7 +342,7 @@ export function runAnalysisTask(
 
       case 'stage': {
         const e = evt as StageEvent;
-        const text = stageText(e.name);
+        const text = e.label || stageText(e.name);
         if (text) {
           handlers.onStage(text);
           pushTimeline(text);
@@ -352,7 +352,7 @@ export function runAnalysisTask(
 
       case 'tool': {
         const e = evt as ToolEvent;
-        const text = toolText(e.name);
+        const text = e.label || toolText(e.name);
         if (!text) return;
         const key = `tool:${e.name}`;
         if (e.action === 'start') {
@@ -366,7 +366,7 @@ export function runAnalysisTask(
 
       case 'dag_task': {
         const e = evt as DagTaskEvent;
-        const text = toolText(e.task_name) ?? e.task_name;
+        const text = e.label || (toolText(e.task_name) ?? e.task_name);
         const key = `dag:${e.task_name}`;
         if (e.action === 'start') {
           handlers.onStage(`正在执行 ${text}`);

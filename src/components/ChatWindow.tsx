@@ -300,7 +300,6 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
               userId={userId}
               onTraceClick={setActiveTraceId}
               onRegenerate={handleRegenerate}
-              onStop={stopStreamForMessage}
             />
           ))}
           <div ref={messagesEndRef} />

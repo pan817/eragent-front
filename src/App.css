@@ -212,21 +212,30 @@
   box-shadow: none;
 }
 
-/* 流式中按钮变"停止"形态：深色方块，占位与发送按钮一致不跳动 */
+/* 流式中按钮变"停止"形态：红色系，圆形停止符，平滑过渡 */
 .send-btn.send-btn--stop {
-  background: #1e293b;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
   color: #fff;
   cursor: pointer;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+  animation: stop-btn-pulse 2s ease-in-out infinite;
 }
 
 .send-btn.send-btn--stop:hover {
-  background: #0f172a;
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
   transform: translateY(-1px) scale(1.05);
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4);
+  animation: none;
 }
 
 .send-btn.send-btn--stop:active {
   transform: translateY(0) scale(0.95);
+  animation: none;
+}
+
+@keyframes stop-btn-pulse {
+  0%, 100% { box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3); }
+  50% { box-shadow: 0 2px 12px rgba(239, 68, 68, 0.5); }
 }
 
 /* ---------- Generic spinner ---------- */

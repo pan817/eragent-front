@@ -6,7 +6,7 @@ import { formatMs } from '../utils/format';
 import './InputBar.css';
 
 export type AnalystRole = 'general' | 'procurement' | 'finance' | 'supply';
-export type OutputMode = 'detailed' | 'brief' | 'table';
+export type OutputMode = 'auto' | 'detailed' | 'brief' | 'table' | 'chat';
 export type TimeRange = '' | '7d' | '30d' | '90d' | 'this_month' | 'last_month';
 
 export interface SendOptions {
@@ -42,7 +42,7 @@ const ROLES: RoleDef[] = [
   { key: 'supply', label: '供应链主管', icon: '📦', hint: '聚焦交付、库存、风险异常' },
 ];
 
-const OPTIONS_STORAGE_KEY = 'erp-agent-input-options-v1';
+const OPTIONS_STORAGE_KEY = 'erp-agent-input-options-v2';
 const SHORTCUT_STORAGE_KEY = 'erp-agent-input-shortcut-v1';
 /** 消息行数 ≥ 此值时启用"长消息软保护"：裸 Enter 插换行而非发送 */
 const SOFT_PROTECT_MIN_LINES = 3;
@@ -53,7 +53,7 @@ type SendShortcut = 'enter' | 'mod-enter';
 
 const DEFAULT_OPTIONS: SendOptions = {
   role: 'general',
-  outputMode: 'detailed',
+  outputMode: 'auto',
   timeRange: '',
 };
 
@@ -61,12 +61,15 @@ interface OutputModeDef {
   key: OutputMode;
   label: string;
   icon: string;
+  hint: string;
 }
 
 const OUTPUT_MODES: OutputModeDef[] = [
-  { key: 'detailed', label: '详细报告', icon: '📄' },
-  { key: 'brief', label: '简报摘要', icon: '📋' },
-  { key: 'table', label: '数据表格', icon: '📊' },
+  { key: 'auto', label: '自动（推荐）', icon: '✨', hint: '系统按查询性质自动选择：事实查询用对话风格，分析查询用详细报告' },
+  { key: 'detailed', label: '详细报告', icon: '📄', hint: 'Markdown 报告四段结构：标题 + 摘要 + 发现 + 建议' },
+  { key: 'brief', label: '简报摘要', icon: '📋', hint: '3-5 个要点形式，控制在 500 字' },
+  { key: 'table', label: '数据表格', icon: '📊', hint: '优先用 Markdown 表格 + 简短结论' },
+  { key: 'chat', label: '对话', icon: '💬', hint: '自然对话直答，不加标题与建议段落' },
 ];
 
 interface TimeRangeDef {
@@ -474,6 +477,7 @@ export default function InputBar({
                       <span className="input-role-item-icon">{m.icon}</span>
                       <div className="input-role-item-text">
                         <div className="input-role-item-label">{m.label}</div>
+                        <div className="input-role-item-hint">{m.hint}</div>
                       </div>
                       {m.key === options.outputMode && (
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">

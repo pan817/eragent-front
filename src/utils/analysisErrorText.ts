@@ -13,6 +13,11 @@ const ERROR_MAIN_TEXT: Record<string, string> = {
   LLM_ERROR: 'AI 模型暂时不可用，请稍后重试',
   INTENT_UNCLEAR: '未能理解你的问题，请换个说法再试',
   NO_DATA: '未查询到相关数据，请调整查询条件',
+  // Phase 2 ReAct 路径典型错误码（见 docs/sse_react_backend_answers.md §5.3）
+  AGENT_INVOKE_FAILED: '分析未能完成，请稍后重试',
+  EMPTY_RESPONSE: '模型响应为空，请稍后重试',
+  LLM_TIMEOUT: '模型响应超时，请稍后重试',
+  CANCELLED: '已取消',
 };
 
 export const FALLBACK_ERROR_MAIN = '分析失败';

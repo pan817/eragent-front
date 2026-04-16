@@ -16,7 +16,7 @@ import './ChatWindow.css';
 
 const DEFAULT_SEND_OPTIONS: SendOptions = {
   role: 'general',
-  outputMode: 'detailed',
+  outputMode: 'auto',
   timeRange: '',
 };
 

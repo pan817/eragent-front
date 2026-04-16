@@ -231,6 +231,27 @@ describe('useMessageSending', () => {
       }),
     )
   })
+
+  it('passes default output_mode "auto" to analyzeQuery when no options given', async () => {
+    const params = baseParams()
+    mockAnalyzeQuery.mockResolvedValue({
+      report_id: 'r-1', status: 'success', report_markdown: 'ok',
+      analysis_type: '', query: '', user_id: '', session_id: '',
+      time_range: '', anomalies: [], supplier_kpis: [], summary: {},
+      error: null, completed_tasks: [], failed_tasks: [],
+      created_at: '', duration_ms: 0,
+    })
+
+    const { result } = renderHook(() => useMessageSending(params))
+
+    await act(async () => {
+      await result.current.handleSend('test')
+    })
+
+    expect(mockAnalyzeQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ output_mode: 'auto' }),
+    )
+  })
 })
 
 describe('handleRegenerate', () => {

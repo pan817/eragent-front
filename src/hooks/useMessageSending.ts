@@ -18,6 +18,14 @@ import type { SendOptions } from '../components/InputBar';
 
 import { genId } from '../utils/id';
 
+/**
+ * 接受的 chunk.node 白名单。
+ * - "report"：Phase 1 DAG 路径
+ * - "agent_final"：Phase 2 ReAct 兜底路径（P2PAgent 最终 text turn）
+ * 其他值视为协议外事件，告警并丢弃，避免未来后端新增 node 时污染当前气泡 buffer。
+ */
+const ACCEPTED_CHUNK_NODES: ReadonlySet<string> = new Set(['report', 'agent_final']);
+
 /** 把错误上报给顶层 toast，便于用户在离开该消息气泡视野时也能感知失败 */
 function reportSendError(err: unknown, fallbackMsg: string): string {
   const msg = err instanceof Error ? err.message : fallbackMsg;
@@ -29,7 +37,7 @@ function reportSendError(err: unknown, fallbackMsg: string): string {
 
 const DEFAULT_SEND_OPTIONS: SendOptions = {
   role: 'general',
-  outputMode: 'detailed',
+  outputMode: 'auto',
   timeRange: '',
 };
 
@@ -208,6 +216,7 @@ export function useMessageSending({
               chunkBuffer: undefined,
               lastChunkIndex: undefined,
               chunkBroken: undefined,
+              chunkEosReceived: undefined,
             };
           }
           return {
@@ -222,6 +231,7 @@ export function useMessageSending({
             chunkBuffer: undefined,
             lastChunkIndex: undefined,
             chunkBroken: undefined,
+            chunkEosReceived: undefined,
           };
         }),
       sid
@@ -280,6 +290,7 @@ export function useMessageSending({
                     chunkBuffer: undefined,
                     lastChunkIndex: undefined,
                     chunkBroken: undefined,
+                    chunkEosReceived: undefined,
                   }
                 : m
             ),
@@ -310,6 +321,7 @@ export function useMessageSending({
                     chunkBuffer: undefined,
                     lastChunkIndex: undefined,
                     chunkBroken: undefined,
+                    chunkEosReceived: undefined,
                   }
                 : m
             ),
@@ -375,25 +387,53 @@ export function useMessageSending({
         );
       },
       onChunk: (chunk: ChunkEvent) => {
-        // 规则 1：message_id 不匹配直接丢弃（多任务并发或 Phase 2 新 node 的兼容）
+        // 规则 0：未知 node 视为协议外事件，告警并丢弃（UT-F06）。
+        // 当前只接受 "report"(Phase 1 DAG) 和 "agent_final"(Phase 2 ReAct) 两种。
+        if (!ACCEPTED_CHUNK_NODES.has(chunk.node)) {
+          console.warn('[sse] unknown chunk.node, ignored:', chunk.node);
+          return;
+        }
+        // 规则 1：message_id 不匹配直接丢弃（多任务并发或其他气泡的 chunk）
         if (chunk.message_id !== assistantMsgId) return;
         setMessages(
           prev =>
             prev.map(m => {
               if (m.id !== assistantMsgId) return m;
+              // 规则 2：eos 后再收到同 message_id chunk → 幂等丢弃并告警（UT-F05）。
+              // 后端契约保证 eos 后不再发同 id chunk；前端仍需防御性忽略。
+              if (m.chunkEosReceived) {
+                console.warn(
+                  '[sse] chunk after eos, ignored:',
+                  { index: chunk.index, node: chunk.node }
+                );
+                return m;
+              }
               const last = m.lastChunkIndex ?? -1;
-              // 规则 2：后端 tenacity 重试 → index=0 且已经累加过内容 → 清 buffer 重新累加
-              const isRetryReset = chunk.index === 0 && last > 0;
+              // 规则 3：index 回退 → 清 buffer 重新累加。覆盖两种后端路径：
+              //   a) tenacity 重试：新一轮首 chunk index=0，delta 可能非空（真实增量）
+              //   b) 混输 rollback：后端主动发 {index:0, delta:"", eos:false} 重置帧
+              // 两种路径处理完全相同，前端不区分。
+              const isRetryReset = chunk.index <= last && last >= 0;
               const buffer = isRetryReset ? '' : (m.chunkBuffer ?? '');
-              // 规则 3：gap（非重试重置情况下 index 非连续）→ 标记 chunkBroken，仍 append；
-              // done 时会用 report_markdown 覆盖保证一致性
+              // 规则 4：gap（非重置情况下 index 非连续）→ 标记 chunkBroken，仍 append；
+              // done 时会用 report_markdown 覆盖保证一致性。
               const isGap = !isRetryReset && last >= 0 && chunk.index > last + 1;
+              // 规则 5：eos=true 帧的 delta 可能非空（后端 _flush(eos=True) 可能带尾部残留）→
+              // 必须先 append 再停止累加。
+              // 注意：eos 不清 streaming、不切 UI 渲染分支——因为 MessageBubble 的分支是
+              //   "sending + streaming → StreamingText" / "sending + !streaming → LoadingStages"
+              // 而 eos 到 done 之间有 100~800ms 空窗（content 还没被快照填），若此时清 streaming
+              // 会闪回 LoadingStages（执行过程时间线）。统一由 onDone→applySnapshotToMessage
+              // 作为唯一熄光标 + 切 MarkdownContent 的触发点；error/aborted 场景后端也不保证
+              // 发 eos，以 done 为最终停止信号，语义一致。
+              const eos = chunk.eos === true;
               return {
                 ...m,
                 streaming: true,
                 chunkBuffer: buffer + (chunk.delta ?? ''),
                 lastChunkIndex: chunk.index,
                 chunkBroken: isGap ? true : (isRetryReset ? false : m.chunkBroken),
+                chunkEosReceived: eos ? true : m.chunkEosReceived,
                 // chunk 期间隐藏 stageText（避免打字机上方仍显示"正在生成报告..."）
                 stageText: undefined,
               };
@@ -443,6 +483,7 @@ export function useMessageSending({
                 chunkBuffer: undefined,
                 lastChunkIndex: undefined,
                 chunkBroken: undefined,
+                chunkEosReceived: undefined,
               };
             }),
           sid
@@ -713,6 +754,7 @@ export function useMessageSending({
                 chunkBuffer: undefined,
                 lastChunkIndex: undefined,
                 chunkBroken: undefined,
+                chunkEosReceived: undefined,
                 stageText: undefined,
                 timeline: undefined,
               }

@@ -50,7 +50,7 @@ describe('InputBar', () => {
       '测试消息',
       expect.objectContaining({
         role: 'general',
-        outputMode: 'detailed',
+        outputMode: 'auto',
         timeRange: '',
       }),
     )
@@ -91,9 +91,9 @@ describe('InputBar', () => {
     expect(screen.getByText('通用分析')).toBeInTheDocument()
   })
 
-  it('shows output mode selector with default "详细报告"', () => {
+  it('shows output mode selector with default "自动（推荐）"', () => {
     render(<InputBar {...defaultProps} />)
-    expect(screen.getByText('详细报告')).toBeInTheDocument()
+    expect(screen.getByText('自动（推荐）')).toBeInTheDocument()
   })
 
   it('shows time range selector with default "不限时间"', () => {
@@ -166,10 +166,12 @@ describe('InputBar — output mode switching', () => {
     const onSend = vi.fn()
     render(<InputBar {...defaultProps} onSend={onSend} />)
 
-    fireEvent.click(screen.getByText('详细报告').closest('button')!)
+    fireEvent.click(screen.getByText('自动（推荐）').closest('button')!)
 
+    expect(screen.getByText('详细报告')).toBeInTheDocument()
     expect(screen.getByText('简报摘要')).toBeInTheDocument()
     expect(screen.getByText('数据表格')).toBeInTheDocument()
+    expect(screen.getByText('对话')).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('简报摘要').closest('button[role="option"]')!)
 
@@ -180,6 +182,20 @@ describe('InputBar — output mode switching', () => {
     expect(onSend).toHaveBeenCalledWith(
       '测试',
       expect.objectContaining({ outputMode: 'brief' }),
+    )
+  })
+
+  it('passes default outputMode "auto" to onSend without selection', async () => {
+    const onSend = vi.fn()
+    render(<InputBar {...defaultProps} onSend={onSend} />)
+
+    const textarea = screen.getByRole('textbox')
+    await userEvent.type(textarea, '事实查询')
+    await userEvent.click(screen.getByLabelText('发送'))
+
+    expect(onSend).toHaveBeenCalledWith(
+      '事实查询',
+      expect.objectContaining({ outputMode: 'auto' }),
     )
   })
 })

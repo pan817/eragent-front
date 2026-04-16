@@ -4,8 +4,8 @@ export interface AnalyzeRequest {
   session_id: string;
   /** 分析师角色：后端据此切换 system prompt / 分析侧重 */
   analyst_role?: 'general' | 'procurement' | 'finance' | 'supply';
-  /** 输出模式：detailed（默认详细报告）/ brief（简报摘要）/ table（数据表格） */
-  output_mode?: 'detailed' | 'brief' | 'table';
+  /** 输出模式：auto（默认，后端按查询性质自动决策）/ detailed（详细报告）/ brief（简报摘要）/ table（数据表格）/ chat（自然对话直答） */
+  output_mode?: 'auto' | 'detailed' | 'brief' | 'table' | 'chat';
   /** 时间范围过滤：7d / 30d / 90d / this_month / last_month；不传则不限 */
   time_range?: string;
   /** 后端自动落库 user + assistant 两条消息；guest 模式传 false */
@@ -126,6 +126,8 @@ export interface ChatMessage {
   lastChunkIndex?: number;
   /** LLM 流式输出：检测到 chunk gap（index 非连续）。需等 done 拉快照覆盖，不再信任 chunkBuffer。 */
   chunkBroken?: boolean;
+  /** LLM 流式输出：已收到 eos=true 帧。用于 eos 后同 message_id chunk 幂等丢弃；重试重置时清回 false。 */
+  chunkEosReceived?: boolean;
   /** 用户主动停止生成。status='success' + aborted=true 时，气泡保留已生成内容并在脚注显示"已停止生成"。 */
   aborted?: boolean;
 }

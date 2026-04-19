@@ -25,7 +25,7 @@ describe('ExamplePromptsDrawer', () => {
   it('renders drawer with title when open', () => {
     render(<ExamplePromptsDrawer {...defaultProps} />)
 
-    expect(screen.getByText('示例问题库')).toBeInTheDocument()
+    expect(screen.getByText('测试用例库')).toBeInTheDocument()
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 

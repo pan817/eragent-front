@@ -142,7 +142,7 @@ export default function ExamplePromptsDrawer({ open, onClose, onPick }: Props) {
         <div className="examples-header">
           <div className="examples-header-top">
             <div className="examples-header-title">
-              <h2 id="examples-drawer-title">示例问题库</h2>
+              <h2 id="examples-drawer-title">测试用例库</h2>
               <span className="examples-header-badge">{EXAMPLE_PROMPTS.length} 条</span>
             </div>
             <button
@@ -255,6 +255,7 @@ export default function ExamplePromptsDrawer({ open, onClose, onPick }: Props) {
                     <div className="examples-item-main">
                       <div className="examples-item-title">
                         {highlight(p.title, search)}
+                        {p.path && <span className={`examples-path-badge examples-path-${p.path === 'DAG' ? 'dag' : p.path === 'ReAct' ? 'react' : p.path === '早退' ? 'early' : 'lookup'}`}>{p.path}</span>}
                       </div>
                       <div className="examples-item-query">
                         {highlight(p.query, search)}

@@ -323,6 +323,7 @@ export interface StageEvent extends BaseEvent {
   name: string;
   label?: string;
   attrs?: Record<string, unknown>;
+  duration_ms?: number;
 }
 export interface ToolEvent extends BaseEvent {
   type: 'tool';

@@ -113,7 +113,7 @@ describe('InputBar', () => {
       />,
     )
 
-    expect(screen.getByText('示例')).toBeInTheDocument()
+    expect(screen.getByText('测试用例')).toBeInTheDocument()
     expect(screen.getByText('测试数据')).toBeInTheDocument()
   })
 

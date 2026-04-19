@@ -290,7 +290,10 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
                     style={{ animationDelay: `${i * 80}ms` }}
                   >
                     <div className="suggestion-icon">{s.icon}</div>
-                    <div className="suggestion-title">{s.title}</div>
+                    <div className="suggestion-title">
+                      {s.title}
+                      <span className={`suggestion-path ${s.path === 'ReAct' ? 'suggestion-path-react' : ''}`}>{s.path}</span>
+                    </div>
                     <div className="suggestion-desc">{s.description}</div>
                     <div className="suggestion-arrow">→</div>
                   </button>

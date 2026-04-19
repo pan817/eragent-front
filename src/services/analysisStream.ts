@@ -345,7 +345,7 @@ export function runAnalysisTask(
         const text = e.label || stageText(e.name);
         if (text) {
           handlers.onStage(text);
-          pushTimeline(text);
+          pushTimeline(text, undefined, e.duration_ms);
         }
         return;
       }

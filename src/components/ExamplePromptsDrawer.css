@@ -310,6 +310,9 @@
   color: var(--text);
   line-height: 1.4;
   margin-bottom: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .examples-item-query {
@@ -458,4 +461,46 @@
   .examples-body {
     padding: 12px 12px 20px;
   }
+}
+
+/* ---------- Path badges ---------- */
+.examples-path-badge {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: var(--r-full);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+.examples-path-dag {
+  background: var(--brand-500-12);
+  color: var(--brand-600);
+}
+
+.examples-path-react {
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+}
+
+.examples-path-early {
+  background: var(--bg-muted);
+  color: var(--text-muted);
+}
+
+.examples-path-lookup {
+  background: var(--info-bg);
+  color: var(--info-fg);
+}
+
+[data-theme='dark'] .examples-path-dag {
+  color: var(--brand-400);
+}
+
+[data-theme='dark'] .examples-path-react {
+  color: var(--warning);
+}
+
+[data-theme='dark'] .examples-path-lookup {
+  color: var(--info);
 }

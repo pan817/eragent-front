@@ -14,11 +14,14 @@ import {
   INVOICE_ANOMALIES,
   PAYMENT_FACTS,
   PAYMENT_ANOMALIES,
-  QUERY_SCENARIOS,
+  TEST_CASE_GROUPS,
+  TEST_CASE_EXTRA_GROUPS,
+  BOUNDARY_CASES,
   ID_CHIPS,
   TIPS_TABS,
   type TipsTabKey,
   type AnomalyNote,
+  type RoutePath,
 } from '../data/testDataTips';
 import './TestDataTips.css';
 
@@ -259,31 +262,84 @@ function PaymentsPanel() {
   );
 }
 
+const PATH_STYLE: Record<RoutePath, string> = {
+  DAG: 'tips-path-dag',
+  ReAct: 'tips-path-react',
+  '早退': 'tips-path-early',
+  Lookup: 'tips-path-lookup',
+  'Lookup/ReAct': 'tips-path-lookup',
+};
+
+function PathBadge({ path }: { path: RoutePath }) {
+  return <span className={`tips-path-badge ${PATH_STYLE[path]}`}>{path}</span>;
+}
+
 function QueriesPanel() {
+  const allGroups = [...TEST_CASE_GROUPS, ...TEST_CASE_EXTRA_GROUPS];
   return (
     <>
       <div className="tips-section">
-        <SectionTitle emoji="💡" title="推荐查询方式" />
+        <SectionTitle emoji="🧪" title="测试用例集" count={`${allGroups.reduce((s, g) => s + g.cases.length, 0) + BOUNDARY_CASES.length} 条`} />
         <p className="tips-section-desc">
-          下列场景与示例可直接复制到聊天输入框，也可在「示例问题库」中找到更多变体。
+          每条用例标注执行路径：<span className="tips-path-badge tips-path-dag">DAG</span> 并行执行、
+          <span className="tips-path-badge tips-path-react">ReAct</span> Agent 自主调用、
+          <span className="tips-path-badge tips-path-early">早退</span> 模板直答、
+          <span className="tips-path-badge tips-path-lookup">Lookup</span> 快捷路径。
+          路由层级：L1 关键词命中（零延迟）、L2 语义匹配（毫秒级）、L3 LLM 分类（0.5~2s）。
         </p>
+      </div>
+
+      {allGroups.map(group => (
+        <div key={group.title} className="tips-section">
+          <h4 className="tips-group-title">{group.title}</h4>
+          <div className="tips-table-wrap">
+            <table className="tips-table tips-table-compact">
+              <thead>
+                <tr>
+                  <th style={{ width: 36 }}>#</th>
+                  <th>查询</th>
+                  <th style={{ width: 60 }}>路由</th>
+                  <th style={{ width: 90 }}>路径</th>
+                  <th>说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                {group.cases.map(c => (
+                  <tr key={c.id}>
+                    <td className="tips-cell-center">{c.id}</td>
+                    <td>{c.query}</td>
+                    <td className="tips-cell-center"><code>{c.route}</code></td>
+                    <td className="tips-cell-center"><PathBadge path={c.path} /></td>
+                    <td className="tips-cell-note">{c.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+
+      <div className="tips-section">
+        <h4 className="tips-group-title">十四、边界与异常输入</h4>
         <div className="tips-table-wrap">
-          <table className="tips-table">
+          <table className="tips-table tips-table-compact">
             <thead>
               <tr>
-                <th style={{ width: '30%' }}>分析场景</th>
-                <th>示例查询</th>
+                <th style={{ width: 36 }}>#</th>
+                <th>查询</th>
+                <th>附加参数</th>
+                <th style={{ width: 70 }}>预期</th>
+                <th>说明</th>
               </tr>
             </thead>
             <tbody>
-              {QUERY_SCENARIOS.map(row => (
-                <tr key={row.scenario}>
-                  <td>{row.scenario}</td>
-                  <td>
-                    {row.examples.map((ex, i) => (
-                      <div key={i}>"{ex}"</div>
-                    ))}
-                  </td>
+              {BOUNDARY_CASES.map(c => (
+                <tr key={c.id}>
+                  <td className="tips-cell-center">{c.id}</td>
+                  <td>{c.query}</td>
+                  <td>{c.params ? <code>{c.params}</code> : '—'}</td>
+                  <td className="tips-cell-center"><code>{c.expected}</code></td>
+                  <td className="tips-cell-note">{c.note}</td>
                 </tr>
               ))}
             </tbody>

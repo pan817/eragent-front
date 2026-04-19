@@ -219,6 +219,15 @@ export default function InputBar({
     }
   }, [sendShortcut]);
 
+  // 流式输出结束（disabled: true → false）后自动聚焦输入框
+  const prevDisabledRef = useRef(disabled);
+  useEffect(() => {
+    if (prevDisabledRef.current && !disabled) {
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+    prevDisabledRef.current = disabled;
+  }, [disabled]);
+
   // Cmd/Ctrl + K 聚焦输入框
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -567,7 +576,7 @@ export default function InputBar({
                 title="浏览示例问题库"
               >
                 <span>📚</span>
-                示例
+                测试用例
               </button>
             )}
             <button

@@ -113,6 +113,33 @@
   font-weight: 600;
   color: var(--text);
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.suggestion-path {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: var(--r-full);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.7;
+  background: var(--brand-500-12);
+  color: var(--brand-600);
+}
+
+[data-theme='dark'] .suggestion-path {
+  color: var(--brand-400);
+}
+
+.suggestion-path-react {
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+}
+
+[data-theme='dark'] .suggestion-path-react {
+  color: var(--warning);
 }
 
 .suggestion-desc {

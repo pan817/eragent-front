@@ -283,7 +283,7 @@
   margin-left: 4px;
   background: transparent;
   border: none;
-  color: #2563eb;
+  color: var(--brand-600);
   cursor: pointer;
   font-size: 12px;
   padding: 0;
@@ -292,7 +292,7 @@
 }
 
 .aborted-regen:hover {
-  color: #1d4ed8;
+  color: var(--brand-700);
 }
 
 .loading-timeline {
@@ -552,6 +552,14 @@
 [data-theme='dark'] .severity-ok,
 [data-theme='dark'] .severity-success {
   color: #6ee7b7;
+}
+
+[data-theme='dark'] .aborted-regen {
+  color: var(--brand-400);
+}
+
+[data-theme='dark'] .aborted-regen:hover {
+  color: var(--brand-200);
 }
 
 /* ---------- Responsive overrides (copied from App.css P6b) ---------- */

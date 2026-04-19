@@ -345,24 +345,22 @@
   justify-content: center;
   gap: 10px;
   padding: 8px 16px;
-  background: #fef3c7;
-  color: #78350f;
+  background: var(--warning-bg);
+  color: var(--warning-fg);
   font-size: 13px;
   font-weight: 500;
-  border-bottom: 1px solid #fde68a;
+  border-bottom: 1px solid var(--warning);
 }
 
 [data-theme='dark'] .offline-banner {
-  background: rgba(217, 119, 6, 0.18);
-  color: #fbbf24;
-  border-bottom-color: rgba(217, 119, 6, 0.4);
+  color: var(--warning);
 }
 
 .offline-banner-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #dc2626;
+  background: var(--danger);
   animation: offline-pulse 1.4s ease-in-out infinite;
 }
 
@@ -539,8 +537,8 @@
 }
 
 .markdown-body pre {
-  background: #1e293b;
-  color: #e2e8f0;
+  background: var(--bg-muted);
+  color: var(--text);
   padding: 14px 16px;
   border-radius: var(--r-md);
   overflow-x: auto;
@@ -970,7 +968,7 @@
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #dc2626;
+  background: var(--danger);
   transform: translateY(-1px);
   box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
 }
@@ -1172,13 +1170,21 @@
 
 [data-theme='dark'] .markdown-body pre,
 [data-theme='dark'] .span-attributes pre {
-  background: #020617;
   border: 1px solid var(--border);
 }
 
 [data-theme='dark'] .markdown-body code {
   background: var(--bg-subtle);
   color: var(--brand-400);
+}
+
+[data-theme='dark'] .markdown-body a {
+  color: var(--brand-400);
+  border-bottom-color: var(--brand-500-30);
+}
+
+[data-theme='dark'] .markdown-body a:hover {
+  border-bottom-color: var(--brand-400);
 }
 
 [data-theme='dark'] .markdown-body h3 {
@@ -1752,8 +1758,8 @@ code.gantt-detail-value {
 .gantt-attributes pre {
   margin: 6px 0 0;
   padding: 12px 14px;
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--bg-muted);
+  color: var(--text);
   border-radius: var(--r-md);
   font-size: 11px;
   line-height: 1.6;
@@ -1855,8 +1861,8 @@ code.gantt-detail-value {
 .span-drawer-pre {
   margin: 0;
   padding: 12px 14px;
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--bg-muted);
+  color: var(--text);
   border-radius: var(--r-md);
   font-size: 11px;
   line-height: 1.6;
@@ -2126,7 +2132,7 @@ code.gantt-detail-value {
 
 .model-token-name {
   font-weight: 600;
-  color: #10b981;
+  color: var(--success);
 }
 
 .model-token-idx {

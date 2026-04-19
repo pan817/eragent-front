@@ -12,6 +12,8 @@
   padding: 16px 14px 14px;
   gap: 14px;
   overflow: visible;
+  transition: width var(--dur-base) var(--ease-out),
+              padding var(--dur-base) var(--ease-out);
 }
 
 [data-theme='dark'] .sidebar {
@@ -664,10 +666,10 @@
   margin-left: auto;
   width: 28px;
   height: 28px;
-  border: none;
+  border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--text-subtle);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -677,8 +679,13 @@
 }
 
 .sidebar-collapse-btn:hover {
-  background: var(--bg-subtle);
-  color: var(--text);
+  background: var(--brand-500-12);
+  border-color: var(--brand-500-35);
+  color: var(--brand-600);
+}
+
+[data-theme='dark'] .sidebar-collapse-btn:hover {
+  color: var(--brand-400);
 }
 
 /* ---------- Collapsed state ---------- */
@@ -688,14 +695,36 @@
   align-items: center;
 }
 
+.sidebar .sidebar-brand-text {
+  opacity: 1;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
 .sidebar.is-collapsed .sidebar-brand {
-  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
   border-bottom: none;
   padding-bottom: 4px;
 }
 
+.sidebar.is-collapsed .sidebar-brand-text {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
 .sidebar.is-collapsed .sidebar-collapse-btn {
   margin-left: 0;
+}
+
+.sidebar .sidebar-search,
+.sidebar .sidebar-section-label,
+.sidebar .sidebar-history,
+.sidebar .sidebar-stats,
+.sidebar .sidebar-footer {
+  opacity: 1;
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 
 .sidebar.is-collapsed .sidebar-search,
@@ -703,7 +732,18 @@
 .sidebar.is-collapsed .sidebar-history,
 .sidebar.is-collapsed .sidebar-stats,
 .sidebar.is-collapsed .sidebar-footer {
-  display: none;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+  max-height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+
+.sidebar .sidebar-new-chat span {
+  opacity: 1;
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 
 .sidebar.is-collapsed .sidebar-new-chat {
@@ -712,6 +752,12 @@
   padding: 0;
   justify-content: center;
   border-radius: var(--r-md);
+}
+
+.sidebar.is-collapsed .sidebar-new-chat span {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
 }
 
 /* ---------- Responsive ---------- */

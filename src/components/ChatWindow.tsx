@@ -20,6 +20,19 @@ const DEFAULT_SEND_OPTIONS: SendOptions = {
   timeRange: '',
 };
 
+/** 读取 InputBar 持久化的用户选项，保证建议卡片 / 示例点击与输入框一致 */
+const OPTIONS_STORAGE_KEY = 'erp-agent-input-options-v2';
+function getCurrentSendOptions(): SendOptions {
+  try {
+    const raw = localStorage.getItem(OPTIONS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<SendOptions>;
+      return { ...DEFAULT_SEND_OPTIONS, ...parsed };
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_SEND_OPTIONS;
+}
+
 interface ChatWindowProps {
   userId: string | null;
   onLogin: (username: string) => void;
@@ -54,7 +67,9 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
   const [tipsOpen, setTipsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [draft, setDraft] = useState<{ text: string; nonce: number }>({ text: '', nonce: 0 });
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem('sidebar-collapsed') === '1'; } catch { return false; }
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
@@ -221,7 +236,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
       if (p.editable) {
         setDraft(d => ({ text: p.query, nonce: d.nonce + 1 }));
       } else {
-        handleSendWithScroll(p.query, DEFAULT_SEND_OPTIONS);
+        handleSendWithScroll(p.query, getCurrentSendOptions());
       }
     },
     [handleSendWithScroll]
@@ -245,7 +260,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
         onLogout={onLogout}
         onNewChat={handleNewChat}
         collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(v => !v)}
+        onToggleCollapse={() => setSidebarCollapsed(v => { const next = !v; try { localStorage.setItem('sidebar-collapsed', next ? '1' : '0'); } catch { /* ignore */ } return next; })}
         onOpenShortcuts={() => setShortcutsOpen(true)}
         busySessions={busySessions}
       />
@@ -270,7 +285,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
                 {SUGGESTIONS.map((s, i) => (
                   <button
                     key={s.title}
-                    onClick={() => handleSendWithScroll(s.query, DEFAULT_SEND_OPTIONS)}
+                    onClick={() => handleSendWithScroll(s.query, getCurrentSendOptions())}
                     className="suggestion-card"
                     style={{ animationDelay: `${i * 80}ms` }}
                   >

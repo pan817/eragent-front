@@ -120,9 +120,9 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #dc2626;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
   border-radius: var(--r-md);
   padding: 8px 12px;
 }
@@ -132,9 +132,7 @@
 }
 
 [data-theme='dark'] .login-error {
-  color: #fca5a5;
-  background: rgba(220, 38, 38, 0.1);
-  border-color: rgba(220, 38, 38, 0.3);
+  color: var(--danger);
 }
 
 .login-submit {

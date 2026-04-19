@@ -12,7 +12,7 @@
   word-break: break-word;
   line-height: 1.7;
   font-size: 14px;
-  color: #1e293b;
+  color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -21,14 +21,14 @@
 }
 
 .streaming-text-gap {
-  color: #94a3b8;
+  color: var(--text-subtle);
   margin: 0 2px;
 }
 
 .streaming-text-cursor {
   display: inline-block;
   margin-left: 1px;
-  color: #3b82f6;
+  color: var(--brand-500);
   font-weight: 600;
   animation: streaming-text-blink 1s steps(2, start) infinite;
   transform: translateY(-1px);

@@ -48,7 +48,7 @@
   --border-strong: #cbd5e1;
   --text: #0f172a;
   --text-muted: #475569;
-  --text-subtle: #94a3b8;
+  --text-subtle: #64748b;
 
   /* Elevation */
   --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -82,12 +82,16 @@
   --border-strong: #374151;
   --text: #f1f5f9;
   --text-muted: #cbd5e1;
-  --text-subtle: #64748b;
+  --text-subtle: #94a3b8;
 
   --success-bg: rgba(16, 185, 129, 0.15);
+  --success-fg: #6ee7b7;
   --warning-bg: rgba(245, 158, 11, 0.15);
+  --warning-fg: #fcd34d;
   --danger-bg: rgba(239, 68, 68, 0.15);
+  --danger-fg: #fca5a5;
   --info-bg: rgba(59, 130, 246, 0.15);
+  --info-fg: #93c5fd;
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);

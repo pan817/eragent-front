@@ -25,7 +25,7 @@ export interface ScenarioRow {
   examples: string[];
 }
 
-export type RoutePath = 'DAG' | 'ReAct' | '早退' | 'Lookup' | 'Lookup/ReAct';
+export type RoutePath = 'DAG' | 'ReAct' | '早退' | 'Lookup' | 'Lookup/ReAct' | 'Graph';
 
 export interface TestCaseRow {
   id: number;
@@ -290,6 +290,57 @@ export const TEST_CASE_EXTRA_GROUPS: TestCaseGroup[] = [
       { id: 60, query: '检查 PO-2024-0035 的三路匹配情况', route: 'L1', path: 'DAG', note: '命中"三路匹配"；提取 po_number=PO-2024-0035' },
       { id: 61, query: '分析最近60天的付款逾期', route: 'L1', path: 'DAG', note: 'request 级 time_range_days=90 覆盖 query 中的 60' },
       { id: 62, query: '分析三路匹配发票收货异常', route: 'L1', path: 'DAG', note: '极短 time_range_days=1，DAG 执行但可能无数据' },
+    ],
+  },
+  {
+    title: '十五、知识图谱搜索与实体查询',
+    cases: [
+      { id: 68, query: '在知识图谱中搜索"华为"相关的采购实体', route: 'L1', path: 'Graph', note: '命中"知识图谱""搜索"；调用 search_knowledge_graph(query="华为")' },
+      { id: 69, query: '图谱里有哪些供应商节点', route: 'L2', path: 'Graph', note: '语义匹配图谱查询种子；调用 search_knowledge_graph(entity_types=["Supplier"])' },
+      { id: 70, query: '搜索与 PO-2024-0035 相关的所有图谱节点', route: 'L1', path: 'Graph', note: '命中"图谱""搜索"；提取 po_number → search_knowledge_graph 双路径检索' },
+      { id: 71, query: '查看供应商 SUP-001 在图谱中的详细信息', route: 'L1', path: 'Graph', note: '命中"图谱""详细信息"；调用 get_entity_detail(entity_id="SUP-001")' },
+      { id: 72, query: 'SUP-002 的图谱节点有哪些关联', route: 'L2', path: 'Graph', note: '语义匹配；调用 get_entity_detail 返回节点属性+连接' },
+      { id: 73, query: '查询供应商 SUP-001 最近的时间线变化', route: 'L1', path: 'Graph', note: '命中"时间线"；调用 query_entity_timeline(entity_id="SUP-001")' },
+      { id: 74, query: 'SUP-003 的采购事件时间轴', route: 'L2', path: 'Graph', note: '语义匹配时间线种子；调用 query_entity_timeline' },
+      { id: 75, query: '查看 SUP-001 在图谱中的关联关系', route: 'L1', path: 'Graph', note: '命中"关联关系""图谱"；调用 query_entity_relationships(entity_id="SUP-001")' },
+      { id: 76, query: 'SUP-002 和哪些采购订单有关系，深度查 3 层', route: 'L2', path: 'Graph', note: '调用 query_entity_relationships(depth=3)；depth 上限截断' },
+    ],
+  },
+  {
+    title: '十六、图谱路径追踪与供应商画像',
+    cases: [
+      { id: 77, query: '找出 SUP-001 到 INV-2024-0100 之间的图谱路径', route: 'L1', path: 'Graph', note: '命中"路径""图谱"；调用 find_path_between(from="SUP-001", to="INV-2024-0100")' },
+      { id: 78, query: 'PO-2024-0035 和 PAY-2024-0050 之间怎么关联的', route: 'L2', path: 'Graph', note: '语义匹配路径查询；调用 find_path_between' },
+      { id: 79, query: '追踪采购订单 PO-2024-0035 的完整采购链路', route: 'L1', path: 'Graph', note: '命中"追踪""采购链路"；调用 trace_procurement_chain(po_number="PO-2024-0035")' },
+      { id: 80, query: 'PO-2024-0010 从下单到付款经过了哪些节点', route: 'L2', path: 'Graph', note: '语义匹配链路追踪；调用 trace_procurement_chain' },
+      { id: 81, query: '查看供应商 SUP-001 的图谱画像', route: 'L1', path: 'Graph', note: '命中"画像""供应商"；调用 query_supplier_profile(supplier_id="SUP-001")' },
+      { id: 82, query: 'SUP-002 在图谱中的全貌是什么', route: 'L2', path: 'Graph', note: '语义匹配供应商画像；调用 query_supplier_profile' },
+    ],
+  },
+  {
+    title: '十七、图谱异常检测与风险分析',
+    cases: [
+      { id: 83, query: '检测图谱中的所有异常模式', route: 'L1', path: 'Graph', note: '命中"图谱""异常"；调用 detect_graph_anomalies(scope="all")' },
+      { id: 84, query: '图谱里有没有孤立节点或断裂关系', route: 'L2', path: 'Graph', note: '语义匹配异常检测种子；调用 detect_graph_anomalies(scope="orphan")' },
+      { id: 85, query: '检测供应商维度的图谱异常', route: 'L1', path: 'Graph', note: '命中"异常""供应商"；调用 detect_graph_anomalies(scope="supplier")' },
+      { id: 86, query: '非法 scope 参数的图谱异常检测', route: '—', path: 'Graph', note: '传入 scope="invalid_xxx"，预期返回错误提示' },
+      { id: 87, query: '分析供应商 SUP-001 的风险影响链', route: 'L1', path: 'Graph', note: '命中"风险""影响"；调用 query_risk_impact(entity_id="SUP-001", risk_type="supplier")' },
+      { id: 88, query: '如果某物料断供会影响哪些订单', route: 'L2', path: 'Graph', note: '语义匹配风险分析；调用 query_risk_impact(risk_type="material_disruption")' },
+      { id: 89, query: '分析付款链路上的风险传导', route: 'L2', path: 'Graph', note: '语义匹配；调用 query_risk_impact(risk_type="payment_chain")' },
+      { id: 90, query: '传入非法 risk_type 的风险分析', route: '—', path: 'Graph', note: '传入 risk_type="invalid"，预期返回错误提示' },
+    ],
+  },
+  {
+    title: '十八、图谱对比与竞争分析',
+    cases: [
+      { id: 91, query: '对比供应商 SUP-001 和 SUP-002 的图谱属性', route: 'L1', path: 'Graph', note: '命中"对比""供应商""图谱"；调用 compare_entities(entity_a="SUP-001", entity_b="SUP-002")' },
+      { id: 92, query: '华为和中兴在图谱中有什么差异', route: 'L2', path: 'Graph', note: '语义匹配对比分析；实体消解后调用 compare_entities' },
+      { id: 93, query: '查看所有合同的覆盖情况', route: 'L1', path: 'Graph', note: '命中"合同""覆盖"；调用 find_contract_coverage()' },
+      { id: 94, query: 'SUP-001 的合同覆盖了哪些采购', route: 'L1', path: 'Graph', note: '命中"合同""覆盖"；调用 find_contract_coverage(vendor_id="SUP-001")' },
+      { id: 95, query: '哪些采购没有合同保障', route: 'L2', path: 'Graph', note: '语义匹配合同覆盖种子；调用 find_contract_coverage 筛选未覆盖项' },
+      { id: 96, query: '找出 SUP-001 的竞争供应商', route: 'L1', path: 'Graph', note: '命中"竞争""供应商"；调用 find_competing_suppliers(vendor_id="SUP-001")' },
+      { id: 97, query: '有哪些供应商通过竞标争夺同一品类', route: 'L2', path: 'Graph', note: '语义匹配竞争分析；调用 find_competing_suppliers(by_auction=True)' },
+      { id: 98, query: '调用 find_competing_suppliers 不传任何参数', route: '—', path: 'Graph', note: 'vendor_id 和 by_auction 均为空，预期返回错误提示' },
     ],
   },
 ];

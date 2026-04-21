@@ -142,6 +142,16 @@
   color: var(--warning);
 }
 
+.suggestion-path-graph {
+  background: #f0e6ff;
+  color: #7c3aed;
+}
+
+[data-theme='dark'] .suggestion-path-graph {
+  background: #2e1065;
+  color: #c4b5fd;
+}
+
 .suggestion-desc {
   font-size: 12px;
   color: var(--text-muted);

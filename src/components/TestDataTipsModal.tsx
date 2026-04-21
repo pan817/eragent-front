@@ -268,6 +268,7 @@ const PATH_STYLE: Record<RoutePath, string> = {
   '早退': 'tips-path-early',
   Lookup: 'tips-path-lookup',
   'Lookup/ReAct': 'tips-path-lookup',
+  Graph: 'tips-path-graph',
 };
 
 function PathBadge({ path }: { path: RoutePath }) {
@@ -284,7 +285,8 @@ function QueriesPanel() {
           每条用例标注执行路径：<span className="tips-path-badge tips-path-dag">DAG</span> 并行执行、
           <span className="tips-path-badge tips-path-react">ReAct</span> Agent 自主调用、
           <span className="tips-path-badge tips-path-early">早退</span> 模板直答、
-          <span className="tips-path-badge tips-path-lookup">Lookup</span> 快捷路径。
+          <span className="tips-path-badge tips-path-lookup">Lookup</span> 快捷路径、
+          <span className="tips-path-badge tips-path-graph">Graph</span> 知识图谱。
           路由层级：L1 关键词命中（零延迟）、L2 语义匹配（毫秒级）、L3 LLM 分类（0.5~2s）。
         </p>
       </div>

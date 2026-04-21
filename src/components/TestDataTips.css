@@ -521,6 +521,11 @@
   color: var(--info-fg);
 }
 
+.tips-path-graph {
+  background: #f0e6ff;
+  color: #7c3aed;
+}
+
 [data-theme='dark'] .tips-path-dag {
   color: var(--brand-400);
 }
@@ -531,4 +536,9 @@
 
 [data-theme='dark'] .tips-path-lookup {
   color: var(--info);
+}
+
+[data-theme='dark'] .tips-path-graph {
+  background: #2e1065;
+  color: #c4b5fd;
 }

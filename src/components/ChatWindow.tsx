@@ -292,7 +292,7 @@ export default function ChatWindow({ userId, onLogin, onLogout }: ChatWindowProp
                     <div className="suggestion-icon">{s.icon}</div>
                     <div className="suggestion-title">
                       {s.title}
-                      <span className={`suggestion-path ${s.path === 'ReAct' ? 'suggestion-path-react' : ''}`}>{s.path}</span>
+                      <span className={`suggestion-path ${s.path === 'ReAct' ? 'suggestion-path-react' : s.path === 'Graph' ? 'suggestion-path-graph' : ''}`}>{s.path}</span>
                     </div>
                     <div className="suggestion-desc">{s.description}</div>
                     <div className="suggestion-arrow">→</div>

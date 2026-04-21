@@ -9,10 +9,11 @@ export type PromptCategory =
   | 'discount'
   | 'po_cycle'
   | 'concentration'
+  | 'graph'
   | 'mixed'
   | 'context';
 
-export type PromptPath = 'DAG' | 'ReAct' | '早退' | 'Lookup/ReAct';
+export type PromptPath = 'DAG' | 'ReAct' | '早退' | 'Lookup/ReAct' | 'Graph';
 
 export interface ExamplePrompt {
   id: string;
@@ -45,6 +46,7 @@ export const CATEGORIES: CategoryDef[] = [
   { key: 'discount', label: '折扣利用率', icon: '🏷️', description: '早付折扣机会与损失' },
   { key: 'po_cycle', label: 'PO 周期', icon: '⏱️', description: '下单到收货到付款耗时' },
   { key: 'concentration', label: '供应商集中度', icon: '🎯', description: '采购依赖与单一来源风险' },
+  { key: 'graph', label: '知识图谱', icon: '🕸️', description: '图谱搜索、路径追踪、风险分析' },
   { key: 'mixed', label: '综合分析', icon: '🧭', description: '跨领域探索性问题' },
   { key: 'context', label: '会话上下文', icon: '💭', description: '基于上次分析结果追问' },
 ];
@@ -413,6 +415,117 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     title: '供应商采购占比分析',
     query: '供应商采购占比分析',
     path: 'DAG',
+  },
+
+  // ========== 知识图谱 ==========
+  {
+    id: 'graph-1',
+    category: 'graph',
+    title: '图谱搜索采购实体',
+    query: '在知识图谱中搜索"华为"相关的采购实体',
+    path: 'Graph',
+    editable: true,
+  },
+  {
+    id: 'graph-2',
+    category: 'graph',
+    title: '图谱供应商节点',
+    query: '图谱里有哪些供应商节点',
+    path: 'Graph',
+  },
+  {
+    id: 'graph-3',
+    category: 'graph',
+    title: '搜索 PO 相关图谱节点',
+    query: '搜索与 PO-2024-0035 相关的所有图谱节点',
+    path: 'Graph',
+    editable: true,
+  },
+  {
+    id: 'graph-4',
+    category: 'graph',
+    title: '供应商图谱详细信息',
+    query: '查看供应商 SUP-001 在图谱中的详细信息',
+    path: 'Graph',
+    editable: true,
+  },
+  {
+    id: 'graph-5',
+    category: 'graph',
+    title: '实体时间线查询',
+    query: '查询供应商 SUP-001 最近的时间线变化',
+    path: 'Graph',
+    editable: true,
+  },
+  {
+    id: 'graph-6',
+    category: 'graph',
+    title: '图谱关联关系',
+    query: '查看 SUP-001 在图谱中的关联关系',
+    path: 'Graph',
+    editable: true,
+  },
+  {
+    id: 'graph-7',
+    category: 'graph',
+    title: '图谱路径查找',
+    query: '找出 SUP-001 到 INV-2024-0100 之间的图谱路径',
+    path: 'Graph',
+    editable: true,
+  },
+  {
+    id: 'graph-8',
+    category: 'graph',
+    title: '采购链路追踪',
+    query: '追踪采购订单 PO-2024-0035 的完整采购链路',
+    path: 'Graph',
+    editable: true,
+  },
+  {
+    id: 'graph-9',
+    category: 'graph',
+    title: '供应商图谱画像',
+    query: '查看供应商 SUP-001 的图谱画像',
+    path: 'Graph',
+    editable: true,
+  },
+  {
+    id: 'graph-10',
+    category: 'graph',
+    title: '图谱异常检测',
+    query: '检测图谱中的所有异常模式',
+    path: 'Graph',
+  },
+  {
+    id: 'graph-11',
+    category: 'graph',
+    title: '风险影响链分析',
+    query: '分析供应商 SUP-001 的风险影响链',
+    path: 'Graph',
+    editable: true,
+  },
+  {
+    id: 'graph-12',
+    category: 'graph',
+    title: '供应商图谱对比',
+    query: '对比供应商 SUP-001 和 SUP-002 的图谱属性',
+    path: 'Graph',
+    editable: true,
+  },
+  {
+    id: 'graph-13',
+    category: 'graph',
+    title: '合同覆盖情况',
+    query: '查看所有合同的覆盖情况',
+    path: 'Graph',
+  },
+  {
+    id: 'graph-14',
+    category: 'graph',
+    title: '竞争供应商查找',
+    query: '找出 SUP-001 的竞争供应商',
+    path: 'Graph',
+    editable: true,
   },
 
   // ========== 综合 / 探索性分析 ==========

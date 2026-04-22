@@ -118,10 +118,10 @@ describe('ChatWindow', () => {
   it('renders suggestion cards on welcome page', () => {
     render(<ChatWindow {...defaultProps} />)
 
-    expect(screen.getByText('三路匹配异常')).toBeInTheDocument()
-    expect(screen.getByText('价格差异分析')).toBeInTheDocument()
-    expect(screen.getByText('采购订单异常')).toBeInTheDocument()
-    expect(screen.getByText('供应商绩效')).toBeInTheDocument()
+    expect(screen.getByText('检查指定 PO 三路匹配')).toBeInTheDocument()
+    expect(screen.getByText('供应商绩效评估')).toBeInTheDocument()
+    expect(screen.getByText('质量与付款关联')).toBeInTheDocument()
+    expect(screen.getByText('采购链路追踪')).toBeInTheDocument()
   })
 
   it('renders messages when they exist', async () => {
